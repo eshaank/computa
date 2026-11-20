@@ -1,0 +1,22 @@
+[package]
+name = "computad"
+version = "0.1.0"
+edition = "2024"
+description = "Collects system metrics and serves them to the Computa menu bar app"
+publish = false
+
+[dependencies]
+anyhow = "1"
+prost = "0.14"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+tokio-stream = { version = "0.1", features = ["net", "time"] }
+tonic = "0.14"
+tonic-prost = "0.14"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+
+[lints.clippy]
+all = "deny"

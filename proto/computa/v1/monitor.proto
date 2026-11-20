@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package computa.v1;
+
+// The API between the Computa menu bar app and the computad daemon.
+//
+// The daemon only reports numbers. Nothing in this service changes the
+// machine it runs on.
+service Monitor {
+  // Phase 0 trial: streams one made-up value per interval. It proves that
+  // a Rust server can stream to a Swift client, and is replaced in phase 1.
+  rpc WatchTicks(WatchTicksRequest) returns (stream Tick);
+}
+
+message WatchTicksRequest {
+  // Milliseconds between ticks. The daemon clamps it to 100..=60000.
+  // Zero means the default of 1000.
+  uint32 interval_ms = 1;
+}
+
+message Tick {
+  // Starts at 1 and goes up by one per tick within a stream.
+  uint64 sequence = 1;
+  // A made-up value between 0 and 100.
+  double value = 2;
+  // When the daemon produced the tick, in milliseconds since the Unix epoch.
+  int64 unix_ms = 3;
+}

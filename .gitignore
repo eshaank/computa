@@ -1,0 +1,24 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/.cc-writes/
+
+# Build output
+node_modules/
+dist/
+target/
+.build/
+*.app
+DerivedData/
+
+# macOS
+.DS_Store
+
+# Reference screenshots show the owner's own screen; keep them local
+project-docs/reference/
+
+# Extra git worktrees
+.worktrees/
