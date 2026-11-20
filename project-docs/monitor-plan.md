@@ -1,8 +1,8 @@
 # Computa monitor: build plan
 
 Status as of 2026-11-20: phases 0 to 6 are built. Phase 0 is on `main`; phases 1 to 6 are pull
-requests 1 to 6, each stacked on the one before. Phase 6 is a draft because it has not run against
-the real M1. Nobody has yet seen the app running on screen; each pull request lists what to try.
+requests 1 to 6, each stacked on the one before. Pull request 7 is a crash fix for the phase 2
+branch. Phase 6 is a draft because it has not run against the real M1. Nobody has yet seen the app running on screen; each pull request lists what to try.
 The "result" sections below say what was checked for each phase.
 
 ## Phase 0 result (2026-11-19)
@@ -153,9 +153,10 @@ Login is off on this Mac and the M1 could not be reached, so real `ssh` was neve
   - Daemon: 130 tests. App: 170 tests.
 - The tunnel uses plain `ssh`, not `rex forward`, which the installed Rex does not have. It sits
   behind one interface, so a `rex forward` version can be added later.
-- A crash from phase 3 was found and fixed here: closing the dashboard while it waited between
-  history fetches crashed in tests. Pull requests 3 to 5 still contain it; it is fixed from this
-  pull request on.
+- A crash was found here: the app aborted when a wait was cancelled part-way through, for example
+  on closing the dashboard, or on opening the popover while the daemon was stopped. The pattern
+  went back to phase 2. The fix is pull request 7, which targets the phase 2 branch, and it has
+  been merged into every branch from phase 3 on. It was reproduced in tests only.
 
 ### What to do on the M1
 
