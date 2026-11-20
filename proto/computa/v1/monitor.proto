@@ -6,23 +6,216 @@ package computa.v1;
 //
 // The daemon only reports numbers. Nothing in this service changes the
 // machine it runs on.
+//
+// Conventions: sizes are bytes, rates are bytes per second, percentages run
+// from 0 to 100, and times are milliseconds since the Unix epoch.
 service Monitor {
-  // Phase 0 trial: streams one made-up value per interval. It proves that
-  // a Rust server can stream to a Swift client, and is replaced in phase 1.
-  rpc WatchTicks(WatchTicksRequest) returns (stream Tick);
+  // Facts about the machine that do not change while the daemon runs.
+  rpc GetHost(GetHostRequest) returns (Host);
+
+  // Streams system samples. The first sample is sent at once, then one per
+  // interval. In the daemon's very first sample after it starts, byte rates
+  // are zero, because a rate needs two readings, and CPU figures are
+  // averages since the machine started.
+  rpc WatchSystem(WatchSystemRequest) returns (stream SystemSample);
+
+  // Returns stored samples, oldest first, to fill charts when a window opens.
+  rpc GetHistory(GetHistoryRequest) returns (History);
 }
 
-message WatchTicksRequest {
-  // Milliseconds between ticks. The daemon clamps it to 100..=60000.
-  // Zero means the default of 1000.
+// ---------------------------------------------------------------- host
+
+message GetHostRequest {}
+
+message Host {
+  // For example "Eshaans-MacBook-Pro".
+  string hostname = 1;
+  // The hardware model identifier, for example "MacBookPro18,3".
+  string model = 2;
+  // For example "Apple M1 Pro".
+  string chip = 3;
+  // For example "macOS 27.0.1".
+  string os_version = 4;
+  string daemon_version = 5;
+  uint64 memory_total_bytes = 6;
+  // The kinds of CPU core, fastest first. Machines with one kind of core
+  // report a single group.
+  repeated CoreGroup core_groups = 7;
+  // When the machine started.
+  int64 boot_unix_ms = 8;
+  // How often the daemon takes a sample. This is the finest resolution of
+  // WatchSystem and GetHistory.
+  uint32 sample_interval_ms = 9;
+  // How many samples the daemon keeps for GetHistory.
+  uint32 history_capacity = 10;
+}
+
+enum CoreKind {
+  CORE_KIND_UNSPECIFIED = 0;
+  CORE_KIND_PERFORMANCE = 1;
+  CORE_KIND_EFFICIENCY = 2;
+}
+
+message CoreGroup {
+  CoreKind kind = 1;
+  // For example "Performance".
+  string name = 2;
+  uint32 core_count = 3;
+}
+
+// ---------------------------------------------------------------- live samples
+
+message WatchSystemRequest {
+  // Milliseconds between samples. Zero means the daemon's sample interval.
+  // The daemon rounds it to a multiple of its sample interval and limits it
+  // to at most 60000.
   uint32 interval_ms = 1;
 }
 
-message Tick {
-  // Starts at 1 and goes up by one per tick within a stream.
-  uint64 sequence = 1;
-  // A made-up value between 0 and 100.
-  double value = 2;
-  // When the daemon produced the tick, in milliseconds since the Unix epoch.
-  int64 unix_ms = 3;
+message SystemSample {
+  int64 unix_ms = 1;
+  Cpu cpu = 2;
+  Memory memory = 3;
+  // Mounted volumes a person would recognise, the startup volume first.
+  repeated Volume volumes = 4;
+  // Read and write rates added up over all physical disks.
+  DiskActivity disk_activity = 5;
+  Network network = 6;
+  // Absent on machines without a battery.
+  optional Battery battery = 7;
+}
+
+message Cpu {
+  // Busy time across all cores, as a share of total capacity.
+  double usage_percent = 1;
+  // The parts of usage_percent spent in programs and in the kernel.
+  double user_percent = 2;
+  double system_percent = 3;
+  // One entry per core, in core order.
+  repeated Core cores = 4;
+  double load_average_1m = 5;
+  double load_average_5m = 6;
+  double load_average_15m = 7;
+}
+
+message Core {
+  uint32 index = 1;
+  CoreKind kind = 2;
+  double usage_percent = 3;
+}
+
+enum MemoryPressure {
+  MEMORY_PRESSURE_UNSPECIFIED = 0;
+  MEMORY_PRESSURE_NORMAL = 1;
+  MEMORY_PRESSURE_WARNING = 2;
+  MEMORY_PRESSURE_CRITICAL = 3;
+}
+
+message Memory {
+  uint64 total_bytes = 1;
+  // What Activity Monitor calls "Memory Used": app + wired + compressed.
+  uint64 used_bytes = 2;
+  uint64 app_bytes = 3;
+  uint64 wired_bytes = 4;
+  uint64 compressed_bytes = 5;
+  // File cache and other memory the system can reclaim at once.
+  uint64 cached_bytes = 6;
+  uint64 free_bytes = 7;
+  uint64 swap_used_bytes = 8;
+  uint64 swap_total_bytes = 9;
+  MemoryPressure pressure = 10;
+}
+
+message Volume {
+  // For example "Macintosh HD".
+  string name = 1;
+  // For example "/".
+  string mount_point = 2;
+  uint64 total_bytes = 3;
+  // total_bytes minus available_bytes.
+  uint64 used_bytes = 4;
+  // Space a person can still use.
+  uint64 available_bytes = 5;
+}
+
+message DiskActivity {
+  double read_bytes_per_sec = 1;
+  double write_bytes_per_sec = 2;
+}
+
+message Network {
+  // Totals over the physical interfaces: wired, Wi-Fi and cellular. Loopback,
+  // VPN tunnels and bridges are left out, because their traffic is also
+  // counted on the physical interface underneath.
+  double rx_bytes_per_sec = 1;
+  double tx_bytes_per_sec = 2;
+  // Interfaces that are up and have an address, loopback excluded. VPN
+  // tunnels are listed here with their own rates.
+  repeated NetworkInterface interfaces = 3;
+}
+
+message NetworkInterface {
+  // For example "en0" or "utun4".
+  string name = 1;
+  // IPv4 and IPv6 addresses, without link-local IPv6.
+  repeated string addresses = 2;
+  double rx_bytes_per_sec = 3;
+  double tx_bytes_per_sec = 4;
+  // Bytes since the interface came up.
+  uint64 rx_bytes_total = 5;
+  uint64 tx_bytes_total = 6;
+}
+
+enum BatteryState {
+  BATTERY_STATE_UNSPECIFIED = 0;
+  BATTERY_STATE_CHARGING = 1;
+  BATTERY_STATE_DISCHARGING = 2;
+  // Plugged in and not charging, usually because it is full.
+  BATTERY_STATE_FULL = 3;
+}
+
+message Battery {
+  double charge_percent = 1;
+  BatteryState state = 2;
+  bool on_ac_power = 3;
+  // Minutes until empty when discharging, or until full when charging.
+  // Absent while macOS is still working it out.
+  optional uint32 minutes_remaining = 4;
+}
+
+// ---------------------------------------------------------------- history
+
+message GetHistoryRequest {
+  // How far back to go. Zero means everything the daemon has kept.
+  uint32 window_seconds = 1;
+  // The most points to return. When the window holds more samples than
+  // this, the daemon averages neighbouring samples together. Zero means no
+  // limit.
+  uint32 max_points = 2;
+}
+
+message History {
+  // Oldest first.
+  repeated HistoryPoint points = 1;
+  // The time one point covers. It equals the sample interval unless samples
+  // were averaged together.
+  uint32 step_ms = 2;
+}
+
+// One point on a chart: the values the dashboard graphs, and nothing else.
+message HistoryPoint {
+  // The time of the newest sample in the point.
+  int64 unix_ms = 1;
+  double cpu_usage_percent = 2;
+  double cpu_user_percent = 3;
+  double cpu_system_percent = 4;
+  uint64 memory_used_bytes = 5;
+  uint64 memory_app_bytes = 6;
+  uint64 memory_wired_bytes = 7;
+  uint64 memory_compressed_bytes = 8;
+  uint64 swap_used_bytes = 9;
+  double net_rx_bytes_per_sec = 10;
+  double net_tx_bytes_per_sec = 11;
+  double disk_read_bytes_per_sec = 12;
+  double disk_write_bytes_per_sec = 13;
 }

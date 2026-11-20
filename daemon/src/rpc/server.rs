@@ -2,44 +2,60 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use tokio::net::TcpListener;
-use tokio_stream::wrappers::{IntervalStream, TcpListenerStream};
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::Stream;
+use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-use super::ticks::{clamp_interval, make_tick};
+use super::watch;
 use crate::pb::monitor_server::{Monitor, MonitorServer};
-use crate::pb::{Tick, WatchTicksRequest};
+use crate::pb::{
+    GetHistoryRequest, GetHostRequest, History, Host, SystemSample, WatchSystemRequest,
+};
+use crate::sampler::{SAMPLE_INTERVAL_MS, Sampler};
 
-type TickStream = Pin<Box<dyn Stream<Item = Result<Tick, Status>> + Send>>;
+type SampleStream = Pin<Box<dyn Stream<Item = Result<SystemSample, Status>> + Send>>;
 
-#[derive(Debug, Default)]
-struct MonitorService;
+#[derive(Debug)]
+struct MonitorService {
+    sampler: Arc<Sampler>,
+}
 
 #[tonic::async_trait]
 impl Monitor for MonitorService {
-    type WatchTicksStream = TickStream;
+    type WatchSystemStream = SampleStream;
 
-    async fn watch_ticks(
+    async fn get_host(&self, _request: Request<GetHostRequest>) -> Result<Response<Host>, Status> {
+        Ok(Response::new(self.sampler.host().clone()))
+    }
+
+    async fn watch_system(
         &self,
-        request: Request<WatchTicksRequest>,
-    ) -> Result<Response<Self::WatchTicksStream>, Status> {
-        let peer = request.remote_addr();
-        let interval = clamp_interval(request.into_inner().interval_ms);
-        tracing::info!(?peer, ?interval, "client started watching ticks");
+        request: Request<WatchSystemRequest>,
+    ) -> Result<Response<Self::WatchSystemStream>, Status> {
+        let requested = request.into_inner().interval_ms;
+        let (interval_ms, steps) = watch::round_interval(requested, SAMPLE_INTERVAL_MS);
+        tracing::debug!(requested, interval_ms, "starting a WatchSystem stream");
+        let stream = watch::stream(self.sampler.subscribe(), steps);
+        Ok(Response::new(Box::pin(stream)))
+    }
 
-        let mut sequence = 0_u64;
-        let ticks = IntervalStream::new(tokio::time::interval(interval)).map(move |_| {
-            sequence += 1;
-            Ok(make_tick(sequence))
-        });
-        Ok(Response::new(Box::pin(ticks)))
+    async fn get_history(
+        &self,
+        request: Request<GetHistoryRequest>,
+    ) -> Result<Response<History>, Status> {
+        let req = request.into_inner();
+        Ok(Response::new(
+            self.sampler.history(req.window_seconds, req.max_points),
+        ))
     }
 }
 
-/// Serves the API on `listener` until `shutdown` completes.
+/// Serves the API on `listener`, with numbers from `sampler`, until
+/// `shutdown` completes.
 ///
 /// # Errors
 ///
@@ -47,10 +63,11 @@ impl Monitor for MonitorService {
 /// than `shutdown` completing.
 pub async fn serve(
     listener: TcpListener,
+    sampler: Arc<Sampler>,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), tonic::transport::Error> {
     Server::builder()
-        .add_service(MonitorServer::new(MonitorService))
+        .add_service(MonitorServer::new(MonitorService { sampler }))
         .serve_with_incoming_shutdown(TcpListenerStream::new(listener), shutdown)
         .await
 }

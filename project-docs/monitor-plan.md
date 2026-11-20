@@ -32,6 +32,29 @@ another machine; that is phase 6.
   plain `ssh` otherwise.
 - **Total estimate:** roughly 9 hours of my working time across all phases.
 
+## Phase 1 result (2026-11-20)
+
+The daemon reports real numbers. Checked on this Mac (an M4 Pro, 24 GB) under heavy load:
+
+| Check | Daemon | Reference | Target | Result |
+|---|---|---|---|---|
+| Memory used | 21.28–21.74 GB | `vm_stat`, same formula: 21.17–21.68 GB | within 3% | within 0.5% |
+| Swap used | 21558.50 MiB | `vm.swapusage`: 21558.50M | — | exact |
+| CPU total | 34.3% | `top`: 31.6% | within 5 points | 2.7 points |
+| Startup disk total and available | 971,350,180 / 263,905,716 KiB | `df -k /`: 971,350,180 / 263,905,960 | within 1% | under 0.001% |
+| Network, 50 MB download | 53.6 MB | 50.0 MB file | within 10% | 7.3% over |
+| Daemon's own CPU | about 0.1% | — | under 1% | pass |
+| Daemon's own memory | about 8 MB | — | under 30 MB | pass |
+
+- 34 tests pass. One of them runs the real server and checks facts that must always hold.
+- "Disk used" is total minus available, which covers the whole APFS container. `df`'s own "Used"
+  column shows only the sealed system volume, so the two differ by design.
+- Network totals count wired, Wi-Fi and cellular only. A VPN tunnel such as NetBird's is listed
+  with its own rate but left out of the total, because its traffic also crosses the physical
+  interface.
+- Not exercised: a Mac with no battery, a Mac with one kind of core, and memory pressure at
+  normal or critical (this Mac sat at "warning" throughout).
+
 ## RPC: what it is here and what it is not
 
 RPC is the language the app and daemon speak. It is not how the bytes travel. For the M1, the bytes
@@ -50,7 +73,7 @@ in phase 0.
 - The `.proto` file generates the data types for both languages, so they cannot drift apart.
 
 **The daemon's API is read-only.** Any program on the machine can reach a `127.0.0.1` port, so the
-API only reports numbers. Anything that changes the machine (kill a process, prevent sleep) stays a
+API only reports numbers. Anything that changes a Rex session (close a pane, open a tab) stays a
 Rex action, which is already access-controlled.
 
 ### API outline
@@ -158,6 +181,9 @@ Uses the `sysinfo` crate where it gives the right number and direct system calls
   uptime, and an "Open Dashboard" button. Preferences and Quit along the bottom.
 - The theme and glow, as described under "Look" below.
 - A clear "daemon not running" state, and automatic reconnect.
+- A **Prevent Sleep** toggle that keeps the Mac running the menu bar app awake. It is built into
+  the app (a macOS power assertion), so it needs neither Rex nor the daemon, and it is released
+  when the app quits. It starts off each time the app launches.
 - **Done when:** the rings match the daemon's numbers to the percent, they update every second
   while open, and stopping then restarting the daemon recovers within 5 seconds with no relaunch.
 
@@ -194,18 +220,19 @@ Uses the `sysinfo` crate where it gives the right number and direct system calls
   row within 2 seconds.
 - Ends with `scripts/install-daemon.sh`, which installs the daemon as a login item (LaunchAgent).
 
-### Phase 5: Rex actions from the popover (about 45 minutes)
+### Phase 5: Rex actions from the dashboard (about 45 minutes)
 
 This is the Lua part. Actions are defined in Rex's `init.lua`, run on the Rex server's machine, and
 are called by the app with `rex do <action>`.
 
-- `computa_prevent_sleep`: starts or stops `caffeinate`. A toggle in the popover.
 - `computa_open_top`: opens `btop` (or `top`) in a new Rex tab. A button in the dashboard.
-- `computa_kill_pane`: closes a pane from the Sessions tab, after a confirmation in the app.
-- The actions live in `rex/computa.lua` in this repo. Your `init.lua` gets one `require` line,
-  which I will show you before adding. Then `rex config reload`.
-- **Done when:** the Prevent Sleep toggle makes `pmset -g assertions` show a sleep-prevention
-  entry and turning it off removes it, and the kill action removes the pane's row within 2 seconds.
+- `computa_close_pane`: closes a pane from the Sessions tab, after a confirmation in the app.
+- The actions live in `rex/computa.lua` in this repo. `just install-rex-actions` adds one line to
+  your `init.lua` and shows it first. Then `rex config reload`.
+- Prevent Sleep is not a Rex action. The owner asked for it on the client Mac only, so it moved
+  into the app in phase 2.
+- **Done when:** the close action removes the pane's row within 2 seconds, and the process viewer
+  opens in a new tab.
 
 ### Phase 6: the M1 (about 1 hour of my time, plus setup on the M1)
 
