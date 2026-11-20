@@ -21,6 +21,16 @@ public protocol MonitorClient: Sendable {
 
     /// Stored samples, oldest first.
     func history(windowSeconds: UInt32, maxPoints: UInt32) async throws -> HistorySeries
+
+    /// Streams the grouped process list, calling `onSnapshot` for each snapshot. Ends like
+    /// `watchSystem`.
+    ///
+    /// - Parameter intervalMilliseconds: Time between snapshots. Zero means 2000.
+    /// - Throws: The error that ended the stream, if it did not end normally.
+    func watchProcesses(
+        intervalMilliseconds: UInt32,
+        onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
+    ) async throws
 }
 
 /// Makes a client for an address. The store makes a fresh one per connection attempt, so a
@@ -68,6 +78,22 @@ public struct DaemonClient: MonitorClient {
             try await monitor.getHistory(request)
         }
         return HistorySeries(message)
+    }
+
+    /// - Throws: The gRPC error if the daemon cannot be reached, does not offer the call, or the
+    ///   stream fails.
+    public func watchProcesses(
+        intervalMilliseconds: UInt32,
+        onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
+    ) async throws {
+        let request = Computa_V1_WatchProcessesRequest.with { $0.intervalMs = intervalMilliseconds }
+        try await withMonitor { monitor in
+            try await monitor.watchProcesses(request) { response in
+                for try await message in response.messages {
+                    guard await onSnapshot(ProcessSnapshot(message)) else { break }
+                }
+            }
+        }
     }
 
     private func withMonitor<Result: Sendable>(

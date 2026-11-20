@@ -6,10 +6,7 @@ import SwiftUI
 /// The views outside the popover.
 @MainActor
 func renderExtras() throws {
-    try render(
-        DashboardView(state: .connected, sample: Fixtures.sample, host: Fixtures.host).frame(width: 440),
-        named: "dashboard-placeholder"
-    )
+    try renderDashboards()
     // ImageRenderer draws AppKit-backed controls such as TextField as placeholders, so this
     // view goes through an NSHostingView instead.
     try renderHosted(

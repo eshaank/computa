@@ -1,7 +1,9 @@
 // Prints what a running computad reports, for checking its numbers by eye
 // against Activity Monitor.
 //
-// Usage: computa-probe [host:port] [count]
+// Usage: computa-probe [host:port] [count] [--dashboard]
+//
+// With --dashboard it also calls GetHistory and WatchProcesses, as the dashboard does.
 
 import ComputaCore
 import Foundation
@@ -28,7 +30,8 @@ func line(for sample: SystemSample) -> String {
     ].joined(separator: " | ")
 }
 
-let arguments = Array(CommandLine.arguments.dropFirst())
+let dashboard = CommandLine.arguments.contains("--dashboard")
+let arguments = Array(CommandLine.arguments.dropFirst().filter { $0 != "--dashboard" })
 let endpoint: DaemonEndpoint
 do {
     endpoint = try arguments.first.map { try DaemonEndpoint(parsing: $0) } ?? .local
@@ -59,6 +62,9 @@ do {
         fail("the daemon ended the stream after \(total) of \(count) samples")
     }
     print("\nOK: received \(total) samples.")
+    if dashboard, !(await probeDashboard(client, endpoint: endpoint)) {
+        fail("some dashboard calls failed")
+    }
 } catch {
     fail("could not read from \(endpoint): \(DaemonProblem(error: error, endpoint: endpoint).summary) (\(error))")
 }

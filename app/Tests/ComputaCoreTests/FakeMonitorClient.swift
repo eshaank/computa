@@ -14,6 +14,13 @@ enum FakeStream: Sendable {
     case sendThenFail([SystemSample], RPCError)
 }
 
+/// What one `watchProcesses` call on the fake does.
+enum FakeProcessStream: Sendable {
+    case fail(RPCError)
+    /// Sends the snapshots, then waits until cancelled.
+    case sendThenHang([ProcessSnapshot])
+}
+
 /// A daemon that follows a script, one entry per connection attempt. After the script runs
 /// out, the last entry repeats.
 final class FakeMonitorClient: MonitorClient {
@@ -21,6 +28,11 @@ final class FakeMonitorClient: MonitorClient {
         var script: [FakeStream]
         var requestedIntervals: [UInt32] = []
         var attempts = 0
+        var processScript: [FakeProcessStream] = [.sendThenHang([Fixtures.processes])]
+        var processIntervals: [UInt32] = []
+        var activeProcessStreams = 0
+        var historyResults: [Result<HistorySeries, RPCError>] = [.success(Fixtures.history(count: 3))]
+        var historyRequests: [HistoryRequest] = []
     }
 
     private let state: Mutex<State>
@@ -29,7 +41,27 @@ final class FakeMonitorClient: MonitorClient {
         state = Mutex(State(script: script))
     }
 
+    struct HistoryRequest: Equatable, Sendable {
+        var windowSeconds: UInt32
+        var maxPoints: UInt32
+    }
+
     var requestedIntervals: [UInt32] { state.withLock { $0.requestedIntervals } }
+    /// One entry per `watchProcesses` call.
+    var processIntervals: [UInt32] { state.withLock { $0.processIntervals } }
+    /// Process streams running right now.
+    var activeProcessStreams: Int { state.withLock { $0.activeProcessStreams } }
+    var historyRequests: [HistoryRequest] { state.withLock { $0.historyRequests } }
+
+    /// Replaces the process script from the next call on; the last entry repeats.
+    func scriptProcesses(_ script: [FakeProcessStream]) {
+        state.withLock { $0.processScript = script }
+    }
+
+    /// Replaces the history answers from the next call on; the last entry repeats.
+    func scriptHistory(_ results: [Result<HistorySeries, RPCError>]) {
+        state.withLock { $0.historyResults = results }
+    }
     var attempts: Int { state.withLock { $0.attempts } }
 
     /// Replaces the script from the next attempt on.
@@ -40,7 +72,30 @@ final class FakeMonitorClient: MonitorClient {
     func host() async throws -> HostInfo { Fixtures.host }
 
     func history(windowSeconds: UInt32, maxPoints: UInt32) async throws -> HistorySeries {
-        HistorySeries(points: [], stepMilliseconds: 1000)
+        let result = state.withLock { state in
+            state.historyRequests.append(HistoryRequest(windowSeconds: windowSeconds, maxPoints: maxPoints))
+            return state.historyResults.count > 1 ? state.historyResults.removeFirst() : state.historyResults[0]
+        }
+        return try result.get()
+    }
+
+    func watchProcesses(
+        intervalMilliseconds: UInt32,
+        onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
+    ) async throws {
+        let step = state.withLock { state in
+            state.processIntervals.append(intervalMilliseconds)
+            state.activeProcessStreams += 1
+            return state.processScript.count > 1 ? state.processScript.removeFirst() : state.processScript[0]
+        }
+        defer { state.withLock { $0.activeProcessStreams -= 1 } }
+        switch step {
+        case .fail(let error):
+            throw error
+        case .sendThenHang(let snapshots):
+            for snapshot in snapshots where await !onSnapshot(snapshot) { return }
+            try await Task.sleep(for: .seconds(3600))
+        }
     }
 
     func watchSystem(

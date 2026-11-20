@@ -22,9 +22,10 @@ struct ComputaApp: App {
         .menuBarExtraStyle(.window)
 
         Window("Computa Dashboard", id: WindowID.dashboard) {
-            DashboardView(state: model.store.state, sample: model.store.sample, host: model.store.host)
-                .background(WindowVisibilityReader { model.store.setOpen($0, .dashboard) })
+            DashboardHost(model: model)
         }
+        .defaultSize(width: 460, height: 760)
+        .windowResizability(.contentMinSize)
         .defaultLaunchBehavior(.suppressed)
 
         Window("Computa Preferences", id: WindowID.preferences) {
