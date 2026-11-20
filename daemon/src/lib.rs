@@ -1,6 +1,8 @@
 //! computad: collects system metrics and serves them over gRPC.
 
+pub mod history;
 pub mod rpc;
+pub mod sampler;
 
 /// Types and service traits generated from `proto/computa/v1/monitor.proto`.
 pub mod pb {

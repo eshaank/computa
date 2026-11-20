@@ -14,8 +14,9 @@ service Monitor {
   rpc GetHost(GetHostRequest) returns (Host);
 
   // Streams system samples. The first sample is sent at once, then one per
-  // interval. Rates in the daemon's very first sample after it starts are
-  // zero, because a rate needs two readings.
+  // interval. In the daemon's very first sample after it starts, byte rates
+  // are zero, because a rate needs two readings, and CPU figures are
+  // averages since the machine started.
   rpc WatchSystem(WatchSystemRequest) returns (stream SystemSample);
 
   // Returns stored samples, oldest first, to fill charts when a window opens.
@@ -143,10 +144,13 @@ message DiskActivity {
 }
 
 message Network {
-  // Totals over every interface that is not loopback.
+  // Totals over the physical interfaces: wired, Wi-Fi and cellular. Loopback,
+  // VPN tunnels and bridges are left out, because their traffic is also
+  // counted on the physical interface underneath.
   double rx_bytes_per_sec = 1;
   double tx_bytes_per_sec = 2;
-  // Interfaces that are up and have an address, loopback excluded.
+  // Interfaces that are up and have an address, loopback excluded. VPN
+  // tunnels are listed here with their own rates.
   repeated NetworkInterface interfaces = 3;
 }
 
