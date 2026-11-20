@@ -32,6 +32,10 @@ service Monitor {
   // reads processes while at least one client is watching. When Rex cannot
   // be reached the stream stays open and says so in each snapshot.
   rpc WatchSessions(WatchSessionsRequest) returns (stream SessionsSnapshot);
+
+  // Returns an app's icon as a small PNG, so a client on another machine can
+  // show it. A client on the same machine can read the icon itself.
+  rpc GetAppIcon(GetAppIconRequest) returns (AppIcon);
 }
 
 // ---------------------------------------------------------------- host
@@ -370,4 +374,18 @@ message Pane {
   string working_directory = 8;
   // The readable processes started in the pane, in no particular order.
   repeated Process processes = 9;
+}
+
+// ---------------------------------------------------------------- app icons
+
+message GetAppIconRequest {
+  // An app bundle on the daemon's machine, as given in
+  // ProcessGroup.bundle_path. It must end in ".app".
+  string bundle_path = 1;
+}
+
+message AppIcon {
+  // PNG data, at most 128 pixels on a side. Empty when the bundle has no
+  // icon the daemon can read; the client then shows its own placeholder.
+  bytes png = 1;
 }

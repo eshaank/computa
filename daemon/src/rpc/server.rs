@@ -12,10 +12,12 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
 use super::{processes, sessions, watch};
+use crate::icons::{IconError, IconService};
 use crate::pb::monitor_server::{Monitor, MonitorServer};
 use crate::pb::{
-    GetHistoryRequest, GetHostRequest, History, Host, ProcessSnapshot, SessionsSnapshot,
-    SystemSample, WatchProcessesRequest, WatchSessionsRequest, WatchSystemRequest,
+    AppIcon, GetAppIconRequest, GetHistoryRequest, GetHostRequest, History, Host, ProcessSnapshot,
+    SessionsSnapshot, SystemSample, WatchProcessesRequest, WatchSessionsRequest,
+    WatchSystemRequest,
 };
 use crate::processes::ProcessMonitor;
 use crate::sampler::{SAMPLE_INTERVAL_MS, Sampler};
@@ -30,6 +32,7 @@ struct MonitorService {
     sampler: Arc<Sampler>,
     processes: ProcessMonitor,
     sessions: SessionMonitor,
+    icons: IconService,
 }
 
 #[tonic::async_trait]
@@ -100,6 +103,21 @@ impl Monitor for MonitorService {
         let stream = sessions::stream(subscription, interval);
         Ok(Response::new(Box::pin(stream)))
     }
+
+    async fn get_app_icon(
+        &self,
+        request: Request<GetAppIconRequest>,
+    ) -> Result<Response<AppIcon>, Status> {
+        let bundle_path = request.into_inner().bundle_path;
+        match self.icons.png(bundle_path).await {
+            Ok(png) => Ok(Response::new(AppIcon { png })),
+            Err(IconError::InvalidPath(message)) => {
+                tracing::debug!(message, "refused a GetAppIcon request");
+                Err(Status::invalid_argument(message))
+            }
+            Err(IconError::Internal) => Err(Status::internal("could not read the app icon")),
+        }
+    }
 }
 
 /// Serves the API on `listener`, with system numbers from `sampler`,
@@ -122,6 +140,7 @@ pub async fn serve(
             sampler,
             processes,
             sessions,
+            icons: IconService::default(),
         }))
         .serve_with_incoming_shutdown(TcpListenerStream::new(listener), shutdown)
         .await
