@@ -100,7 +100,7 @@ public enum MachineValidationError: Error, Sendable, Equatable, CustomStringConv
         case .duplicateName(let name):
             "There is already a machine called \u{201C}\(name)\u{201D}."
         case .emptyDestination:
-            "Enter the SSH destination, as you would type it after ssh, for example eshaan@100.64.0.5."
+            "Enter the SSH destination, as you would type it after ssh, for example morgan@100.64.0.5."
         case .badDestination(let text):
             "\u{201C}\(text)\u{201D} is not an SSH destination. Use user@host, with no spaces and not starting with \u{201C}-\u{201D}."
         case .badPort(let field, let text):

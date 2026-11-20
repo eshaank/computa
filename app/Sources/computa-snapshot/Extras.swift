@@ -10,7 +10,7 @@ func renderExtras() throws {
     try renderMachines()
     // ImageRenderer draws AppKit-backed controls such as TextField as placeholders, so this
     // view goes through an NSHostingView instead.
-    let installed = "/Users/eshaan/" + RexLocator.installPath
+    let installed = "/Users/morgan/" + RexLocator.installPath
     try renderHosted(preferences(rexCommand: "", lookup: .found(path: installed, source: .installLocation)), named: "preferences")
     try renderHosted(preferences(rexCommand: "", lookup: .notFound), named: "preferences-rex-not-found")
     try renderHosted(

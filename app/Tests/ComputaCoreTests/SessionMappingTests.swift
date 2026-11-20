@@ -14,7 +14,7 @@ import Testing
             $0.processCount = 4
             $0.kind = .claude
             $0.program = "claude"
-            $0.workingDirectory = "/Users/eshaan/Documents/computa"
+            $0.workingDirectory = "/Users/morgan/Documents/computa"
             $0.processes = [
                 .with {
                     $0.pid = 901
@@ -90,7 +90,7 @@ import Testing
         #expect(pane.memoryBytes == 7_500)
         #expect(pane.processCount == 4)
         #expect(pane.program == "claude")
-        #expect(pane.workingDirectory == "/Users/eshaan/Documents/computa")
+        #expect(pane.workingDirectory == "/Users/morgan/Documents/computa")
         #expect(pane.processes == [
             ProcessEntry(
                 pid: 901, parentPid: 900, name: "claude", path: "/opt/homebrew/bin/claude",

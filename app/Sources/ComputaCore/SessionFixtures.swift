@@ -9,24 +9,24 @@ extension Fixtures {
         sessions: [
             SessionBuilder.session("website", id: "session:5c21", tabs: [
                 SessionBuilder.tab("website", id: "window:5c21-1", panes: [
-                    SessionBuilder.claude("block:5c21-a", directory: "/Users/eshaan/Projects/eshaan.dev", memory: 512, cpu: 3.4),
-                    SessionBuilder.program("node", "block:5c21-b", directory: "/Users/eshaan/Projects/eshaan.dev", helpers: ["esbuild"], memory: 296, cpu: 7.9),
+                    SessionBuilder.claude("block:5c21-a", directory: "/Users/morgan/Projects/morgan.dev", memory: 512, cpu: 3.4),
+                    SessionBuilder.program("node", "block:5c21-b", directory: "/Users/morgan/Projects/morgan.dev", helpers: ["esbuild"], memory: 296, cpu: 7.9),
                 ]),
             ]),
             SessionBuilder.session("computa", id: "session:01a1", tabs: [
                 SessionBuilder.tab("app", id: "window:01a1-1", panes: [
-                    SessionBuilder.claude("block:01a1-a", directory: "/Users/eshaan/Documents/computa", memory: 438, cpu: 12.6),
-                    SessionBuilder.shell("block:01a1-b", directory: "/Users/eshaan/Documents/computa/app", memory: 5, cpu: 0),
+                    SessionBuilder.claude("block:01a1-a", directory: "/Users/morgan/Documents/computa", memory: 438, cpu: 12.6),
+                    SessionBuilder.shell("block:01a1-b", directory: "/Users/morgan/Documents/computa/app", memory: 5, cpu: 0),
                 ]),
                 SessionBuilder.tab("daemon", id: "window:01a1-2", panes: [
-                    SessionBuilder.claude("block:01a1-c", directory: "/Users/eshaan/Documents/computa/daemon", memory: 401, cpu: 1.8),
-                    SessionBuilder.program("cargo", "block:01a1-d", directory: "/Users/eshaan/Documents/computa/daemon/target/debug/build/computad-3f9a1c", helpers: ["rustc", "rustc"], memory: 1_240, cpu: 286.0),
+                    SessionBuilder.claude("block:01a1-c", directory: "/Users/morgan/Documents/computa/daemon", memory: 401, cpu: 1.8),
+                    SessionBuilder.program("cargo", "block:01a1-d", directory: "/Users/morgan/Documents/computa/daemon/target/debug/build/computad-3f9a1c", helpers: ["rustc", "rustc"], memory: 1_240, cpu: 286.0),
                 ]),
             ]),
             SessionBuilder.session("dotfiles", id: "session:9e07", tabs: [
                 SessionBuilder.tab("dotfiles", id: "window:9e07-1", panes: [
-                    SessionBuilder.program("nvim", "block:9e07-a", directory: "/Users/eshaan/.config/nvim", helpers: ["lua-language-server"], memory: 142, cpu: 0.6),
-                    SessionBuilder.claude("block:9e07-b", directory: "/Users/eshaan/.config", memory: 356, cpu: 0.4),
+                    SessionBuilder.program("nvim", "block:9e07-a", directory: "/Users/morgan/.config/nvim", helpers: ["lua-language-server"], memory: 142, cpu: 0.6),
+                    SessionBuilder.claude("block:9e07-b", directory: "/Users/morgan/.config", memory: 356, cpu: 0.4),
                 ]),
             ]),
             SessionBuilder.session("scratch", id: "session:77f3", tabs: [

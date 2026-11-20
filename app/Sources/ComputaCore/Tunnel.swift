@@ -33,7 +33,7 @@ public typealias TunnelFactory = @MainActor (RemoteMachine) -> any Tunneling
 /// Building the `ssh` command line. A pure function, so it is testable.
 public enum SSHCommandLine {
     /// The arguments after the executable, for example
-    /// `["-N", "-L", "127.0.0.1:50123:127.0.0.1:7300", …, "--", "eshaan@m1"]`.
+    /// `["-N", "-L", "127.0.0.1:50123:127.0.0.1:7300", …, "--", "morgan@m1"]`.
     ///
     /// - Throws: `.badDestination` or `.emptyDestination` for a destination that could be read
     ///   as an option, so no process is ever started with it.

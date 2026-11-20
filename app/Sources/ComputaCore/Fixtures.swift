@@ -5,7 +5,7 @@ public enum Fixtures {
     public static let now = Date(timeIntervalSince1970: 1_795_000_000)
 
     public static let host = HostInfo(
-        hostname: "Eshaans-MacBook-Pro",
+        hostname: "Morgans-MacBook-Pro",
         model: "Mac15,8",
         chip: "Apple M3 Max",
         osVersion: "macOS 27.0.1",

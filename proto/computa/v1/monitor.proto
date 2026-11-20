@@ -43,7 +43,7 @@ service Monitor {
 message GetHostRequest {}
 
 message Host {
-  // For example "Eshaans-MacBook-Pro".
+  // For example "Morgans-MacBook-Pro".
   string hostname = 1;
   // The hardware model identifier, for example "MacBookPro18,3".
   string model = 2;

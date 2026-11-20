@@ -6,7 +6,7 @@ import Testing
 /// The tunnel supervisor against stand-in `ssh` scripts. The real ssh is never run.
 @MainActor
 @Suite(.serialized) struct SSHTunnelTests {
-    let machine = RemoteMachine(destination: "eshaan@100.64.0.5", sshPort: 2222)
+    let machine = RemoteMachine(destination: "morgan@100.64.0.5", sshPort: 2222)
 
     @Test func standInReceivesExactlyTheExpectedArguments() async throws {
         let ssh = try StandInSSH("exec sleep 600")
@@ -25,13 +25,13 @@ import Testing
             "-N", "-L", "127.0.0.1:\(localPort):127.0.0.1:7300",
             "-o", "ExitOnForwardFailure=yes", "-o", "BatchMode=yes",
             "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2", "-o", "ConnectTimeout=10",
-            "-p", "2222", "--", "eshaan@100.64.0.5",
+            "-p", "2222", "--", "morgan@100.64.0.5",
         ])
         #expect(tunnel.state == .connecting, "nothing listens on the local port, so not connected")
     }
 
     @Test func permissionDeniedIsUnreachableWithAReasonAndRetriedWithGrowingDelays() async throws {
-        let ssh = try StandInSSH("echo 'eshaan@100.64.0.5: Permission denied (publickey).' >&2\nexit 255")
+        let ssh = try StandInSSH("echo 'morgan@100.64.0.5: Permission denied (publickey).' >&2\nexit 255")
         defer { ssh.remove() }
         let clock = ManualSleep()
         let tunnel = SSHTunnel(machine: machine, executable: ssh.executable.path, sleep: { try await clock.sleep($0) })
@@ -48,7 +48,7 @@ import Testing
             Issue.record("expected unreachable, got \(tunnel.state)")
             return
         }
-        #expect(reason == "eshaan@100.64.0.5 refused the login. Set up an SSH key for this machine; Computa cannot type a password.")
+        #expect(reason == "morgan@100.64.0.5 refused the login. Set up an SSH key for this machine; Computa cannot type a password.")
         for expectedWaits in 2...5 {
             clock.releaseFirst()
             try await waitUntil("retry wait \(expectedWaits)") { clock.waitingCount == 1 && clock.requested.count == expectedWaits }

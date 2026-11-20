@@ -161,9 +161,9 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
 
 @Suite struct WorkingDirectoryTests {
     @Test func abbreviatesAnyHomeFolder() {
-        #expect(WorkingDirectory.display("/Users/eshaan") == "~")
-        #expect(WorkingDirectory.display("/Users/eshaan/") == "~")
-        #expect(WorkingDirectory.display("/Users/eshaan/Documents/computa") == "~/Documents/computa")
+        #expect(WorkingDirectory.display("/Users/morgan") == "~")
+        #expect(WorkingDirectory.display("/Users/morgan/") == "~")
+        #expect(WorkingDirectory.display("/Users/morgan/Documents/computa") == "~/Documents/computa")
         #expect(WorkingDirectory.display("/Users/someone/x") == "~/x")
     }
 
@@ -172,12 +172,12 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
         #expect(WorkingDirectory.display("/Users/") == "/Users/")
         #expect(WorkingDirectory.display("/Usersfoo/x") == "/Usersfoo/x")
         #expect(WorkingDirectory.display("/tmp") == "/tmp")
-        #expect(WorkingDirectory.display("relative/Users/eshaan") == "relative/Users/eshaan")
+        #expect(WorkingDirectory.display("relative/Users/morgan") == "relative/Users/morgan")
         #expect(WorkingDirectory.display("") == "")
     }
 
     @Test func shortensLongPathsInTheMiddleKeepingTheLastFolders() {
-        let path = "/Users/eshaan/Documents/projects/computa/app/Sources/ComputaCore"
+        let path = "/Users/morgan/Documents/projects/computa/app/Sources/ComputaCore"
         let short = WorkingDirectory.display(path, maxLength: 30)
         #expect(short == "~/…/app/Sources/ComputaCore")
         #expect(short.count <= 30)
@@ -192,6 +192,6 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
     }
 
     @Test func shortPathsAreUnchanged() {
-        #expect(WorkingDirectory.display("/Users/eshaan/a/b", maxLength: 8) == "~/a/b")
+        #expect(WorkingDirectory.display("/Users/morgan/a/b", maxLength: 8) == "~/a/b")
     }
 }

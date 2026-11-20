@@ -4,14 +4,14 @@ import Testing
 @testable import ComputaCore
 
 @Suite struct SSHCommandTests {
-    let m1 = RemoteMachine(destination: "eshaan@100.64.0.5")
+    let m1 = RemoteMachine(destination: "morgan@100.64.0.5")
 
     @Test func argumentsWithoutAPort() throws {
         #expect(try SSHCommandLine.arguments(for: m1, localPort: 50123) == [
             "-N", "-L", "127.0.0.1:50123:127.0.0.1:7300",
             "-o", "ExitOnForwardFailure=yes", "-o", "BatchMode=yes",
             "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2", "-o", "ConnectTimeout=10",
-            "--", "eshaan@100.64.0.5",
+            "--", "morgan@100.64.0.5",
         ])
     }
 
@@ -38,8 +38,8 @@ import Testing
         ("Timeout, server 100.64.0.5 not responding.", "100.64.0.5 did not answer. Is NetBird connected?"),
         ("ssh: connect to host 100.64.0.5 port 22: No route to host", "100.64.0.5 did not answer. Is NetBird connected?"),
         (
-            "eshaan@100.64.0.5: Permission denied (publickey,password,keyboard-interactive).",
-            "eshaan@100.64.0.5 refused the login. Set up an SSH key for this machine; Computa cannot type a password."
+            "morgan@100.64.0.5: Permission denied (publickey,password,keyboard-interactive).",
+            "morgan@100.64.0.5 refused the login. Set up an SSH key for this machine; Computa cannot type a password."
         ),
         (
             "No ED25519 host key is known for 100.64.0.5 and you have requested strict checking.\nHost key verification failed.",
@@ -66,7 +66,7 @@ import Testing
     }
 
     @Test func reasonIsFoundBehindUnrelatedWarnings() {
-        let stderr = "** WARNING: connection is not using a post-quantum key exchange algorithm.\neshaan@100.64.0.5: Permission denied (publickey)."
+        let stderr = "** WARNING: connection is not using a post-quantum key exchange algorithm.\nmorgan@100.64.0.5: Permission denied (publickey)."
         #expect(SSHFailure.reason(stderr: stderr, status: 255, machine: m1).contains("SSH key"))
     }
 

@@ -1,6 +1,9 @@
 # Computa monitor: build plan
 
-Status: approved 2026-11-19 (names, port and gRPC confirmed). Phase 0 is done; phase 1 is next.
+Status as of 2026-11-20: phases 0 to 6 are built. Phase 0 is on `main`; phases 1 to 6 are pull
+requests 1 to 6, each stacked on the one before. Phase 6 is a draft because it has not run against
+the real M1. Nobody has yet seen the app running on screen; each pull request lists what to try.
+The "result" sections below say what was checked for each phase.
 
 ## Phase 0 result (2026-11-19)
 

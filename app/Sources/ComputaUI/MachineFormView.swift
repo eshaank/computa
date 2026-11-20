@@ -76,7 +76,7 @@ struct MachineFormView: View {
     @ViewBuilder
     private var remoteFields: some View {
         field("Name", text: $form.draft.name, prompt: "M1")
-        field("SSH destination", text: $form.draft.destination, prompt: "eshaan@100.64.0.5")
+        field("SSH destination", text: $form.draft.destination, prompt: "morgan@100.64.0.5")
         HStack(spacing: 10) {
             field("SSH port", text: $form.draft.sshPort, prompt: "22")
             field("Daemon port", text: $form.draft.daemonPort, prompt: String(RemoteMachine.defaultDaemonPort))

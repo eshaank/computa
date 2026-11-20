@@ -7,9 +7,9 @@ import SwiftUI
 /// change between runs.
 @MainActor
 enum MachineFixtures {
-    static let m1Remote = RemoteMachine(destination: "eshaan@100.64.0.5", rexHost: "m1")
+    static let m1Remote = RemoteMachine(destination: "morgan@100.64.0.5", rexHost: "m1")
     static let m1 = Machine(id: "m1", name: "M1", kind: .remote(m1Remote))
-    static let studio = Machine(id: "studio", name: "Studio", kind: .remote(RemoteMachine(destination: "eshaan@studio.netbird.cloud", sshPort: 2222)))
+    static let studio = Machine(id: "studio", name: "Studio", kind: .remote(RemoteMachine(destination: "morgan@studio.netbird.cloud", sshPort: 2222)))
     static let machines: [Machine] = [.thisMac(), m1]
 
     static func context(selected: String, tunnel: TunnelState? = nil, machines: [Machine] = machines) -> MachineContext {
@@ -24,7 +24,7 @@ enum MachineFixtures {
     /// The M1's facts, as its daemon would report them.
     static var m1Host: HostInfo {
         var host = Fixtures.host
-        host.hostname = "Eshaans-Mac-mini"
+        host.hostname = "Morgans-Mac-mini"
         host.chip = "Apple M1"
         host.model = "Macmini9,1"
         return host
@@ -97,7 +97,7 @@ private func renderMachineDashboards() throws {
         "dashboard-remote-unreachable", MachineFixtures.context(selected: m1, tunnel: .unreachable(MachineFixtures.unreachable)),
         state: .connecting, height: 560
     )
-    let unlabelled = Machine(id: "m1", name: "M1", kind: .remote(RemoteMachine(destination: "eshaan@100.64.0.5")))
+    let unlabelled = Machine(id: "m1", name: "M1", kind: .remote(RemoteMachine(destination: "morgan@100.64.0.5")))
     try shot(
         "dashboard-sessions-remote-no-label",
         MachineFixtures.context(selected: m1, tunnel: .connected(MachineFixtures.tunnelEnd), machines: [.thisMac(), unlabelled]),
@@ -107,11 +107,11 @@ private func renderMachineDashboards() throws {
 
 @MainActor
 private func renderMachinePreferences() throws {
-    let installed = "/Users/eshaan/" + RexLocator.installPath
+    let installed = "/Users/morgan/" + RexLocator.installPath
     let lookup = RexLookup.found(path: installed, source: .installLocation)
     let machines: [Machine] = [.thisMac(), MachineFixtures.m1, MachineFixtures.studio]
     try renderHosted(preferences(rexCommand: "", lookup: lookup, machines: machines), named: "preferences-machines")
-    let draft = MachineDraft(name: "M1", destination: "eshaan@100.64.0.5", rexHost: "m1")
+    let draft = MachineDraft(name: "M1", destination: "morgan@100.64.0.5", rexHost: "m1")
     try renderHosted(
         preferences(rexCommand: "", lookup: lookup, machines: [.thisMac()], form: MachineForm(target: .add, draft: draft)),
         named: "preferences-machine-form"

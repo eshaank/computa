@@ -11,7 +11,7 @@ import Testing
         return defaults
     }
 
-    let m1 = MachineDraft(name: "M1", destination: "eshaan@100.64.0.5", rexHost: "m1")
+    let m1 = MachineDraft(name: "M1", destination: "morgan@100.64.0.5", rexHost: "m1")
 
     @Test func migratesTheOldSingleAddressIntoThisMac() {
         let defaults = freshDefaults()
@@ -66,7 +66,7 @@ import Testing
         let updated = try list.update(added.id, with: edited)
         #expect(updated.id == added.id)
         #expect(updated.name == "M1 mini")
-        #expect(updated.remote == RemoteMachine(destination: "eshaan@100.64.0.5", sshPort: 22, rexHost: nil))
+        #expect(updated.remote == RemoteMachine(destination: "morgan@100.64.0.5", sshPort: 22, rexHost: nil))
 
         try list.remove(added.id)
         #expect(list.machines.map(\.id) == [Machine.thisMacID])
@@ -125,8 +125,8 @@ import Testing
             try list.add(MachineDraft(name: "m1", destination: "other@host"))
         }
         var renamed = m1
-        renamed.destination = "eshaan@m1.netbird"
-        #expect(try list.update(added.id, with: renamed).remote?.destination == "eshaan@m1.netbird")
+        renamed.destination = "morgan@m1.netbird"
+        #expect(try list.update(added.id, with: renamed).remote?.destination == "morgan@m1.netbird")
     }
 
     @Test func messagesSayWhatToDo() {

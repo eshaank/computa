@@ -45,7 +45,7 @@ public struct Machine: Sendable, Equatable, Codable, Identifiable {
 
 /// How to reach another Mac's daemon: `ssh -L <local>:127.0.0.1:<daemonPort> <destination>`.
 public struct RemoteMachine: Sendable, Equatable, Codable {
-    /// What the owner types after `ssh`, for example `eshaan@100.64.0.5`.
+    /// What the owner types after `ssh`, for example `morgan@100.64.0.5`.
     public var destination: String
     /// `-p`, when not ssh's default.
     public var sshPort: Int?
@@ -63,7 +63,7 @@ public struct RemoteMachine: Sendable, Equatable, Codable {
         self.rexHost = rexHost
     }
 
-    /// The host part of the destination, for messages: `100.64.0.5` from `eshaan@100.64.0.5`.
+    /// The host part of the destination, for messages: `100.64.0.5` from `morgan@100.64.0.5`.
     public var hostName: String {
         destination.split(separator: "@", omittingEmptySubsequences: false).last.map(String.init) ?? destination
     }
