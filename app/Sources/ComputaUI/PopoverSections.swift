@@ -36,7 +36,7 @@ struct RingsSection: View {
     }
 }
 
-/// Machine, network, battery and memory pressure rows, or a connecting note.
+/// Machine, network, battery, memory pressure and Claude Code rows, or a connecting note.
 struct StatusRows: View {
     let content: PopoverContent
 
@@ -54,6 +54,9 @@ struct StatusRows: View {
                 }
                 if let pressure = pressureText(sample.memory.pressure) {
                     InfoRow(label: "Memory Pressure", value: pressure, valueColor: Theme.warning)
+                }
+                if let claude = content.claudeSummary {
+                    InfoRow(label: "Claude Code", value: claude, valueColor: Theme.sessions)
                 }
             } else {
                 InfoRow(label: "Connecting…", value: content.endpoint.description, valueColor: Theme.dimText)

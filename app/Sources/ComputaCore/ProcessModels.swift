@@ -113,12 +113,7 @@ extension ProcessGroup {
             bundlePath: message.bundlePath,
             cpuPercent: message.cpuPercent,
             memoryBytes: message.memoryBytes,
-            processes: message.processes.map {
-                ProcessEntry(
-                    pid: $0.pid, parentPid: $0.parentPid, name: $0.name, path: $0.path,
-                    cpuPercent: $0.cpuPercent, memoryBytes: $0.memoryBytes, residentBytes: $0.residentBytes
-                )
-            }
+            processes: message.processes.map(ProcessEntry.init)
         )
     }
 }

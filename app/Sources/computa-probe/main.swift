@@ -3,7 +3,8 @@
 //
 // Usage: computa-probe [host:port] [count] [--dashboard]
 //
-// With --dashboard it also calls GetHistory and WatchProcesses, as the dashboard does.
+// With --dashboard it also calls GetHistory, WatchProcesses and WatchSessions, as the dashboard
+// does.
 
 import ComputaCore
 import Foundation

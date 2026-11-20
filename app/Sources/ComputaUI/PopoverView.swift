@@ -10,10 +10,13 @@ public struct PopoverContent: Sendable, Equatable {
     public var endpoint: DaemonEndpoint
     public var preventSleepOn: Bool
     public var preventSleepError: String?
+    /// The "Claude Code" row's value, for example "3 panes · 4.2 GB" (`ClaudeUsage.popoverText`).
+    /// Nil hides the row.
+    public var claudeSummary: String?
 
     public init(
         state: ConnectionState, sample: SystemSample?, host: HostInfo?, endpoint: DaemonEndpoint,
-        preventSleepOn: Bool, preventSleepError: String?
+        preventSleepOn: Bool, preventSleepError: String?, claudeSummary: String? = nil
     ) {
         self.state = state
         self.sample = state.isConnected ? sample : nil
@@ -21,6 +24,7 @@ public struct PopoverContent: Sendable, Equatable {
         self.endpoint = endpoint
         self.preventSleepOn = preventSleepOn
         self.preventSleepError = preventSleepError
+        self.claudeSummary = claudeSummary
     }
 }
 

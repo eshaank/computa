@@ -1,0 +1,41 @@
+import AppKit
+import ComputaCore
+import ComputaUI
+import SwiftUI
+
+/// The Sessions tab: sorted by memory and by CPU with a session and a pane open, and each state
+/// that replaces the list.
+@MainActor
+func renderSessionTabs(icons: any AppIconProviding) throws {
+    let unsupported = DaemonProblem(
+        kind: .unsupported, summary: "computad at 127.0.0.1:7300 does not offer this call yet. Update the daemon.",
+        detail: "unimplemented"
+    )
+    let unreachable = DaemonProblem(
+        kind: .unreachable, summary: "computad is not running at 127.0.0.1:7300.", detail: "unavailable"
+    )
+    // "computa" has two tabs; one of its Claude panes is open to its processes.
+    let open: Set<String> = ["session:01a1", "block:01a1-a"]
+    func shot(
+        _ name: String, content: DashboardContent = dashboardContent(), metric: ProcessMetric = .memory,
+        expanded: Set<String> = open, height: CGFloat = 760
+    ) throws {
+        let view = DashboardView(
+            content: content, tab: .constant(.sessions), range: .constant(.fifteenMinutes), query: .constant(""),
+            expanded: .constant([]), sessionsView: .constant(SessionsViewState(metric: metric, expanded: expanded)),
+            icons: icons
+        )
+        try renderWindow(view, size: CGSize(width: 460, height: height), named: name)
+    }
+    try shot("dashboard-sessions-mem", height: 900)
+    try shot("dashboard-sessions-cpu", metric: .cpu, height: 900)
+    try shot("dashboard-sessions-collapsed", expanded: [])
+    try shot("dashboard-sessions-rex-down", content: dashboardContent(sessions: Fixtures.sessionsRexDown))
+    try shot("dashboard-sessions-empty", content: dashboardContent(sessions: Fixtures.sessionsEmpty))
+    try shot("dashboard-sessions-loading", content: dashboardContent(sessionsState: .connecting))
+    try shot("dashboard-sessions-need-update", content: dashboardContent(sessionsState: .daemonNotRunning(unsupported)))
+    try shot(
+        "dashboard-sessions-daemon-not-running",
+        content: dashboardContent(sessionsState: .daemonNotRunning(unreachable))
+    )
+}

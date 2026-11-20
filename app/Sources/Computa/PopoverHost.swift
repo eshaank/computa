@@ -15,8 +15,8 @@ struct PopoverHost: View {
         PopoverView(content: model.popoverContent, actions: actions)
             .padding(.bottom, 2)
             .background(ClearWindowBackground())
-            .background(WindowVisibilityReader { model.store.setOpen($0, .popover) })
-            .onDisappear { model.store.setOpen(false, .popover) }
+            .background(WindowVisibilityReader { model.setPopoverOpen($0) })
+            .onDisappear { model.setPopoverOpen(false) }
             .task(id: model.sleep.lastError) { await clearSleepErrorLater() }
     }
 

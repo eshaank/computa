@@ -14,11 +14,15 @@ public struct DashboardContent: Sendable, Equatable {
     public var processState: ConnectionState
     /// Only kept while the process stream is connected.
     public var processes: ProcessSnapshot?
+    public var sessionsState: ConnectionState
+    /// Only kept while the sessions stream is connected.
+    public var sessions: SessionsSnapshot?
 
     public init(
         state: ConnectionState, sample: SystemSample?, host: HostInfo?, endpoint: DaemonEndpoint,
         history: HistorySeries?, historyProblem: DaemonProblem?,
-        processState: ConnectionState, processes: ProcessSnapshot?
+        processState: ConnectionState, processes: ProcessSnapshot?,
+        sessionsState: ConnectionState = .connecting, sessions: SessionsSnapshot? = nil
     ) {
         self.state = state
         self.sample = state.isConnected ? sample : nil
@@ -28,29 +32,34 @@ public struct DashboardContent: Sendable, Equatable {
         self.historyProblem = historyProblem
         self.processState = processState
         self.processes = processState.isConnected ? processes : nil
+        self.sessionsState = sessionsState
+        self.sessions = sessionsState.isConnected ? sessions : nil
     }
 }
 
 /// The dashboard window: tabs, a history chart, and the tab's list below it, laid out like the
-/// reference. The selected tab, range, search text and expanded groups are bindings, so the app
-/// owns them and snapshots can set them.
+/// reference. The selected tab, range, search text, expanded groups and the Sessions tab's sort
+/// and open rows are bindings, so the app owns them and snapshots can set them.
 public struct DashboardView: View {
     let content: DashboardContent
     @Binding var tab: DashboardTab
     @Binding var range: HistoryRange
     @Binding var query: String
     @Binding var expanded: Set<String>
+    @Binding var sessionsView: SessionsViewState
     let icons: any AppIconProviding
 
     public init(
         content: DashboardContent, tab: Binding<DashboardTab>, range: Binding<HistoryRange>,
-        query: Binding<String>, expanded: Binding<Set<String>>, icons: any AppIconProviding
+        query: Binding<String>, expanded: Binding<Set<String>>, sessionsView: Binding<SessionsViewState>,
+        icons: any AppIconProviding
     ) {
         self.content = content
         _tab = tab
         _range = range
         _query = query
         _expanded = expanded
+        _sessionsView = sessionsView
         self.icons = icons
     }
 
@@ -83,12 +92,16 @@ public struct DashboardView: View {
     @ViewBuilder
     private var connectedBody: some View {
         infoLine
-        VStack(spacing: 8) {
-            HistoryChartView(model: chartModel, tab: tab, message: chartMessage)
-                .frame(height: DashboardMetrics.chartHeight)
-            ChartLegend(entries: tab.legend(content.sample), headline: tab.headline(content.sample))
+        if tab.showsHistory {
+            VStack(spacing: 8) {
+                HistoryChartView(model: chartModel, tab: tab, message: chartMessage)
+                    .frame(height: DashboardMetrics.chartHeight)
+                ChartLegend(entries: tab.legend(content.sample), headline: tab.headline(content.sample))
+            }
+            tabBody
+        } else {
+            SessionsTabView(state: content.sessionsState, snapshot: content.sessions, view: $sessionsView)
         }
-        tabBody
     }
 
     /// The machine on the left, the range picker on the right.
@@ -105,7 +118,11 @@ public struct DashboardView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
+            // Hidden rather than removed on the Sessions tab, so the line keeps its height.
             RangePicker(range: $range, tint: tab.color)
+                .opacity(tab.showsHistory ? 1 : 0)
+                .allowsHitTesting(tab.showsHistory)
+                .accessibilityHidden(!tab.showsHistory)
         }
     }
 

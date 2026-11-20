@@ -2,7 +2,8 @@ import ComputaCore
 import Foundation
 import Synchronization
 
-/// Calls what the dashboard uses: GetHistory for each range, then the first process snapshot.
+/// Calls what the dashboard uses: GetHistory for each range, the first process snapshot, then
+/// the first sessions snapshot.
 /// Each failure is printed with the problem the dashboard would show, and the probe goes on.
 func probeDashboard(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> Bool {
     var allPassed = true
@@ -34,6 +35,7 @@ func probeDashboard(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> B
         allPassed = false
         report("processes", error, endpoint)
     }
+    if !(await probeSessions(client, endpoint: endpoint)) { allPassed = false }
     return allPassed
 }
 
