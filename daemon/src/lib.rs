@@ -2,8 +2,10 @@
 
 pub mod history;
 pub mod processes;
+pub mod rex;
 pub mod rpc;
 pub mod sampler;
+pub mod sessions;
 
 /// Types and service traits generated from `proto/computa/v1/monitor.proto`.
 pub mod pb {

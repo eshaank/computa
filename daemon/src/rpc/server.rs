@@ -11,28 +11,32 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-use super::{processes, watch};
+use super::{processes, sessions, watch};
 use crate::pb::monitor_server::{Monitor, MonitorServer};
 use crate::pb::{
-    GetHistoryRequest, GetHostRequest, History, Host, ProcessSnapshot, SystemSample,
-    WatchProcessesRequest, WatchSystemRequest,
+    GetHistoryRequest, GetHostRequest, History, Host, ProcessSnapshot, SessionsSnapshot,
+    SystemSample, WatchProcessesRequest, WatchSessionsRequest, WatchSystemRequest,
 };
 use crate::processes::ProcessMonitor;
 use crate::sampler::{SAMPLE_INTERVAL_MS, Sampler};
+use crate::sessions::SessionMonitor;
 
 type SampleStream = Pin<Box<dyn Stream<Item = Result<SystemSample, Status>> + Send>>;
 type SnapshotStream = Pin<Box<dyn Stream<Item = Result<ProcessSnapshot, Status>> + Send>>;
+type SessionsStream = Pin<Box<dyn Stream<Item = Result<SessionsSnapshot, Status>> + Send>>;
 
 #[derive(Debug)]
 struct MonitorService {
     sampler: Arc<Sampler>,
     processes: ProcessMonitor,
+    sessions: SessionMonitor,
 }
 
 #[tonic::async_trait]
 impl Monitor for MonitorService {
     type WatchSystemStream = SampleStream;
     type WatchProcessesStream = SnapshotStream;
+    type WatchSessionsStream = SessionsStream;
 
     async fn get_host(&self, _request: Request<GetHostRequest>) -> Result<Response<Host>, Status> {
         Ok(Response::new(self.sampler.host().clone()))
@@ -77,10 +81,30 @@ impl Monitor for MonitorService {
         let stream = processes::stream(subscription, interval);
         Ok(Response::new(Box::pin(stream)))
     }
+
+    async fn watch_sessions(
+        &self,
+        request: Request<WatchSessionsRequest>,
+    ) -> Result<Response<Self::WatchSessionsStream>, Status> {
+        let requested = request.into_inner().interval_ms;
+        let interval_ms = processes::round_interval(requested);
+        tracing::debug!(requested, interval_ms, "starting a WatchSessions stream");
+        let interval = Duration::from_millis(u64::from(interval_ms));
+        let subscription = self.sessions.subscribe(interval).map_err(|error| {
+            tracing::error!(
+                error = format!("{error:#}"),
+                "could not start watching Rex sessions"
+            );
+            Status::internal("could not start process sampling")
+        })?;
+        let stream = sessions::stream(subscription, interval);
+        Ok(Response::new(Box::pin(stream)))
+    }
 }
 
-/// Serves the API on `listener`, with system numbers from `sampler` and
-/// process numbers from `processes`, until `shutdown` completes.
+/// Serves the API on `listener`, with system numbers from `sampler`,
+/// process numbers from `processes` and Rex sessions from `sessions`, until
+/// `shutdown` completes.
 ///
 /// # Errors
 ///
@@ -90,10 +114,15 @@ pub async fn serve(
     listener: TcpListener,
     sampler: Arc<Sampler>,
     processes: ProcessMonitor,
+    sessions: SessionMonitor,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), tonic::transport::Error> {
     Server::builder()
-        .add_service(MonitorServer::new(MonitorService { sampler, processes }))
+        .add_service(MonitorServer::new(MonitorService {
+            sampler,
+            processes,
+            sessions,
+        }))
         .serve_with_incoming_shutdown(TcpListenerStream::new(listener), shutdown)
         .await
 }

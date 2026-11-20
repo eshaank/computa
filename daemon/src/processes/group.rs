@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use super::table::{ProcessEntry, ProcessTable};
+use super::table::{ProcessEntry, ProcessTable, Usage};
 use crate::pb::{HiddenProcesses, Process, ProcessGroup, ProcessSnapshot};
 
 /// The id of the group that holds the operating system's own processes.
@@ -112,6 +112,19 @@ fn describe(table: &ProcessTable, key: &GroupKey) -> (String, String) {
     }
 }
 
+/// The API's description of one readable process.
+pub fn process_message(entry: &ProcessEntry, usage: Usage) -> Process {
+    Process {
+        pid: entry.pid,
+        parent_pid: entry.parent_pid,
+        name: entry.name.to_string(),
+        path: entry.path.to_string(),
+        cpu_percent: usage.cpu_percent,
+        memory_bytes: usage.memory_bytes,
+        resident_bytes: usage.resident_bytes,
+    }
+}
+
 /// Builds the `WatchProcesses` message. Only readable processes are listed,
 /// and a group with none is left out.
 pub fn snapshot(table: &ProcessTable, unix_ms: i64) -> ProcessSnapshot {
@@ -134,15 +147,7 @@ pub fn snapshot(table: &ProcessTable, unix_ms: i64) -> ProcessSnapshot {
         });
         group.cpu_percent += usage.cpu_percent;
         group.memory_bytes = group.memory_bytes.saturating_add(usage.memory_bytes);
-        group.processes.push(Process {
-            pid: entry.pid,
-            parent_pid: entry.parent_pid,
-            name: entry.name.to_string(),
-            path: entry.path.to_string(),
-            cpu_percent: usage.cpu_percent,
-            memory_bytes: usage.memory_bytes,
-            resident_bytes: usage.resident_bytes,
-        });
+        group.processes.push(process_message(entry, usage));
     }
     ProcessSnapshot {
         unix_ms,

@@ -16,6 +16,14 @@ build:
 run:
     cd daemon && cargo run
 
+# Install the daemon as a login item (add --dry-run to see the steps first)
+install-daemon *args:
+    scripts/install-daemon.sh {{args}}
+
+# Remove the daemon's login item and its installed copy
+uninstall-daemon:
+    scripts/install-daemon.sh --uninstall
+
 # Build Computa.app into app/.build/ (a release build, a few minutes when cold)
 app:
     scripts/build-app.sh

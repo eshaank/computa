@@ -2,6 +2,7 @@
 
 mod processes;
 mod server;
+mod sessions;
 mod watch;
 
 pub use server::serve;

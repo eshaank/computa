@@ -26,6 +26,12 @@ service Monitor {
   // processes while at least one client is watching. The first snapshot is
   // sent as soon as CPU figures are available, within about a second.
   rpc WatchProcesses(WatchProcessesRequest) returns (stream ProcessSnapshot);
+
+  // Streams Rex's sessions, tabs and panes, with the CPU and memory used by
+  // the processes running in each pane. The daemon only talks to Rex and
+  // reads processes while at least one client is watching. When Rex cannot
+  // be reached the stream stays open and says so in each snapshot.
+  rpc WatchSessions(WatchSessionsRequest) returns (stream SessionsSnapshot);
 }
 
 // ---------------------------------------------------------------- host
@@ -287,4 +293,81 @@ message Process {
 message HiddenProcesses {
   reserved 2;
   uint32 process_count = 1;
+}
+
+// ---------------------------------------------------------------- Rex sessions
+
+message WatchSessionsRequest {
+  // Milliseconds between snapshots. Zero means 2000. The daemon rounds it to
+  // whole seconds and keeps it between 1000 and 60000.
+  uint32 interval_ms = 1;
+}
+
+message SessionsSnapshot {
+  int64 unix_ms = 1;
+  RexStatus rex = 2;
+  // Empty when Rex cannot be reached. In no particular order.
+  repeated Session sessions = 3;
+}
+
+message RexStatus {
+  bool reachable = 1;
+  // When not reachable, why, in words a person can act on. For example
+  // "The rex command was not found." Empty when reachable.
+  string problem = 2;
+  // The Rex version, for example "0.1.0-preview.14". Empty when unknown.
+  string version = 3;
+}
+
+// Usage figures are added up over the processes the daemon can read.
+// 100 percent of CPU means one core fully busy.
+
+message Session {
+  // Rex's id, for example "session:01a1f5ee-...".
+  string id = 1;
+  string label = 2;
+  double cpu_percent = 3;
+  uint64 memory_bytes = 4;
+  uint32 process_count = 5;
+  // The session's tabs, in Rex's order.
+  repeated SessionWindow windows = 6;
+}
+
+// A tab. Rex calls it a window.
+message SessionWindow {
+  string id = 1;
+  string label = 2;
+  double cpu_percent = 3;
+  uint64 memory_bytes = 4;
+  uint32 process_count = 5;
+  repeated Pane panes = 6;
+}
+
+enum PaneKind {
+  PANE_KIND_UNSPECIFIED = 0;
+  // Nothing but the shell is running.
+  PANE_KIND_SHELL = 1;
+  // Some other program is in the foreground.
+  PANE_KIND_PROGRAM = 2;
+  // Claude Code is running in the pane.
+  PANE_KIND_CLAUDE = 3;
+}
+
+// A pane. Rex calls it a block. Only terminal panes are reported.
+message Pane {
+  // Rex's id, for example "block:01a1f5ee-...".
+  string id = 1;
+  string label = 2;
+  double cpu_percent = 3;
+  uint64 memory_bytes = 4;
+  // Every process started in the pane, readable or not.
+  uint32 process_count = 5;
+  PaneKind kind = 6;
+  // The foreground program as a person would name it, for example "claude",
+  // "zsh" or "nvim". Empty when Rex reports none.
+  string program = 7;
+  // The foreground program's working directory. Empty when unknown.
+  string working_directory = 8;
+  // The readable processes started in the pane, in no particular order.
+  repeated Process processes = 9;
 }
