@@ -29,9 +29,13 @@ struct ComputaApp: App {
         .defaultLaunchBehavior(.suppressed)
 
         Window("Computa Preferences", id: WindowID.preferences) {
-            PreferencesView(current: model.store.endpoint) { (text) throws(DaemonEndpointError) in
-                try model.saveAddress(text)
-            }
+            PreferencesView(
+                current: model.store.endpoint,
+                save: { (text) throws(DaemonEndpointError) in try model.saveAddress(text) },
+                rexCommand: model.rexSetting.path,
+                rexLookup: model.rexSetting.lookup(),
+                saveRexCommand: { model.saveRexCommand($0) }
+            )
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)

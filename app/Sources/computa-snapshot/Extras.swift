@@ -9,9 +9,12 @@ func renderExtras() throws {
     try renderDashboards()
     // ImageRenderer draws AppKit-backed controls such as TextField as placeholders, so this
     // view goes through an NSHostingView instead.
+    let installed = "/Users/eshaan/" + RexLocator.installPath
+    try renderHosted(preferences(rexCommand: "", lookup: .found(path: installed, source: .installLocation)), named: "preferences")
+    try renderHosted(preferences(rexCommand: "", lookup: .notFound), named: "preferences-rex-not-found")
     try renderHosted(
-        PreferencesView(current: .local) { (text) throws(DaemonEndpointError) in try DaemonEndpoint(parsing: text) },
-        named: "preferences"
+        preferences(rexCommand: "/opt/rex/rex", lookup: .settingInvalid(path: "/opt/rex/rex")),
+        named: "preferences-rex-invalid"
     )
     try render(
         HStack(spacing: 24) {
@@ -21,6 +24,14 @@ func renderExtras() throws {
         .foregroundStyle(.white)
         .font(.system(size: 13)),
         named: "menu-bar-labels"
+    )
+}
+
+@MainActor
+private func preferences(rexCommand: String, lookup: RexLookup) -> PreferencesView {
+    PreferencesView(
+        current: .local, save: { (text) throws(DaemonEndpointError) in try DaemonEndpoint(parsing: text) },
+        rexCommand: rexCommand, rexLookup: lookup, saveRexCommand: { _ in lookup }
     )
 }
 

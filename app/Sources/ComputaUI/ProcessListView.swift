@@ -95,6 +95,8 @@ struct ProcessRow: View {
     let metric: ProcessMetric
     /// Where the name starts: under the app's name by default.
     var indent: CGFloat = 14 + 10 + 10 + DashboardMetrics.iconSize + 10
+    /// Where the value ends.
+    var trailing: CGFloat = 14
 
     var body: some View {
         HStack(spacing: 8) {
@@ -112,7 +114,7 @@ struct ProcessRow: View {
                 .foregroundStyle(Theme.text.opacity(0.78))
         }
         .padding(.leading, indent)
-        .padding(.trailing, 14)
+        .padding(.trailing, trailing)
         .frame(height: 24)
     }
 }

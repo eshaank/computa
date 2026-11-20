@@ -24,6 +24,14 @@ install-daemon *args:
 uninstall-daemon:
     scripts/install-daemon.sh --uninstall
 
+# Add Computa's Rex actions to your Rex config; it shows the line and asks first
+install-rex-actions *args:
+    scripts/install-rex-actions.sh {{args}}
+
+# Try the Rex actions in a throwaway Rex session (needs Rex running)
+test-rex-actions:
+    scripts/test-rex-actions.sh
+
 # Build Computa.app into app/.build/ (a release build, a few minutes when cold)
 app:
     scripts/build-app.sh

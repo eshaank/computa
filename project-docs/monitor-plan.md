@@ -112,6 +112,26 @@ tab. The popover has a "Claude Code" row.
 - Not checked: installing the daemon as a login item (`just install-daemon` was only run with
   `--dry-run`), recovery when the Rex server itself restarts, and the Sessions tab on screen.
 
+## Phase 5 result (2026-11-20)
+
+The Sessions tab can close a pane and open a process viewer, through two Rex actions written in
+Lua.
+
+- Checked by machine:
+  - Rex's config checker loads `rex/computa.lua` with both actions.
+  - `just test-rex-actions` runs both actions against the real Rex server in a throwaway session:
+    7 checks pass.
+  - The real `rex` command prints the JSON the app expects, accepts the daemon's session ids, and
+    reports a pane that is already gone as an error the app can show.
+  - The installer was run against a test config file: it asks first, backs up, adds one line,
+    does nothing the second time, and removes the line again.
+  - App: 132 tests, including the runner against a stand-in `rex` (exact arguments, errors, and a
+    hung command being stopped).
+- Not done, on purpose: your real `init.lua` was not changed. Until you run
+  `just install-rex-actions` and `rex config reload`, the buttons show "Rex actions not installed".
+- Not checked: the buttons in the running app, and the actions as loaded by the Rex server from
+  your config (they were run from a script, which uses the same code).
+
 ## RPC: what it is here and what it is not
 
 RPC is the language the app and daemon speak. It is not how the bytes travel. For the M1, the bytes

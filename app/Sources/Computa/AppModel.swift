@@ -4,7 +4,8 @@ import ComputaUI
 import Observation
 import os
 
-/// Everything the app's scenes share: the daemon connection, Prevent Sleep and the settings.
+/// Everything the app's scenes share: the daemon connection, Prevent Sleep, Rex actions and the
+/// settings.
 @MainActor
 @Observable
 final class AppModel {
@@ -13,7 +14,9 @@ final class AppModel {
     let history: HistoryStore
     let processes: ProcessStore
     let sessions: SessionStore
+    let actions: RexActionsModel
     @ObservationIgnored private let settings = DaemonAddressSetting(defaults: .standard)
+    @ObservationIgnored let rexSetting: RexCommandSetting
     @ObservationIgnored private let logger = Logger(subsystem: "app.computa.Computa", category: "app")
 
     init() {
@@ -22,6 +25,10 @@ final class AppModel {
         processes = ProcessStore(endpoint: settings.endpoint)
         sessions = SessionStore(endpoint: settings.endpoint)
         sleep = SleepPreventionModel(preventer: IOKitSleepPreventer())
+        let rexSetting = RexCommandSetting(defaults: .standard)
+        self.rexSetting = rexSetting
+        // Looked up again for every action, so a new setting or a new Rex install counts at once.
+        actions = RexActionsModel(runner: ProcessRexRunner(locate: { rexSetting.lookup() }))
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -67,6 +74,21 @@ final class AppModel {
     func setPopoverOpen(_ open: Bool) {
         store.setOpen(open, .popover)
         sessions.setPopoverOpen(open)
+    }
+
+    /// The Sessions tab's action controls.
+    var sessionActions: SessionActions {
+        SessionActions(busy: actions.busy, outcome: actions.outcome) { [weak self] action in
+            self?.actions.run(action)
+        }
+    }
+
+    /// Stores the `rex` path (blank: find it automatically) and says where `rex` is now.
+    func saveRexCommand(_ text: String) -> RexLookup {
+        rexSetting.save(text)
+        let lookup = rexSetting.lookup()
+        logger.info("rex command set to \"\(text, privacy: .public)\": \(lookup.summary, privacy: .public)")
+        return lookup
     }
 
     /// Checks, stores and applies a new daemon address.
