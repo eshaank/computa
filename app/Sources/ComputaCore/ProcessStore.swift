@@ -39,11 +39,11 @@ public final class ProcessStore {
     public init(
         endpoint: DaemonEndpoint,
         makeClient: @escaping MonitorClientFactory = { DaemonClient(endpoint: $0) },
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: SleepFunction? = nil
     ) {
         self.endpoint = endpoint
         self.makeClient = makeClient
-        self.sleep = sleep
+        self.sleep = sleep ?? realSleep
     }
 
     public func setDashboardOpen(_ open: Bool) {
