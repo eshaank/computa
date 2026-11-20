@@ -31,4 +31,29 @@ import Testing
         #expect(store.state == .connecting)
         #expect(fake.attempts == 1)
     }
+
+    @Test func closingTheDashboardDuringAHistoryWaitStopsFetching() async throws {
+        let fake = FakeMonitorClient([.fail(unavailable)])
+        let store = HistoryStore(endpoint: .local, makeClient: { _ in fake })
+        store.setOpen(true)
+        try await eventually("first fetch") { store.fetchCount == 1 }
+        try await Task.sleep(for: .milliseconds(50))
+        store.setOpen(false)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!store.isRunning)
+        #expect(store.fetchCount == 1)
+    }
+
+    @Test func closingTheDashboardDuringAProcessRetryWaitStopsTheStream() async throws {
+        let fake = FakeMonitorClient([.fail(unavailable)])
+        fake.scriptProcesses([.fail(unavailable)])
+        let store = ProcessStore(endpoint: .local, makeClient: { _ in fake })
+        store.setDashboardOpen(true)
+        try await eventually("first attempt failed") { store.state != .connecting }
+        try await Task.sleep(for: .milliseconds(50))
+        store.setDashboardOpen(false)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!store.isStreaming)
+        #expect(fake.processIntervals.count == 1)
+    }
 }
