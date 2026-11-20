@@ -1,3 +1,4 @@
+import AppKit
 import ComputaCore
 import ComputaUI
 import SwiftUI
@@ -12,6 +13,7 @@ struct DashboardHost: View {
     @State private var expanded: Set<String> = []
     @State private var sessionsView = SessionsViewState()
     @State private var icons = LocalAppIconProvider()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         DashboardView(
@@ -21,11 +23,29 @@ struct DashboardHost: View {
             query: $query,
             expanded: $expanded,
             sessionsView: $sessionsView,
-            icons: icons,
-            sessionActions: model.sessionActions
+            icons: model.iconProvider(local: icons),
+            sessionActions: model.sessionActions,
+            machines: machineSwitching
         )
         .background(WindowVisibilityReader { model.setDashboardOpen($0) })
         .onDisappear { model.setDashboardOpen(false) }
         .onChange(of: tab, initial: true) { _, newTab in model.setDashboardTab(newTab) }
+        // Open rows belong to the machine they were opened on.
+        .onChange(of: model.machines.selected.id) {
+            expanded = []
+            sessionsView.expanded = []
+        }
+    }
+
+    private var machineSwitching: MachineSwitching {
+        let model = model
+        let openWindow = openWindow
+        return MachineSwitching(
+            select: { model.machines.select($0) },
+            manage: {
+                openWindow(id: WindowID.preferences)
+                NSApplication.shared.activate()
+            }
+        )
     }
 }

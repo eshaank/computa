@@ -66,13 +66,20 @@ struct SessionsTabView: View {
         }
     }
 
-    /// "Sort by" and the picker. The last action's outcome takes the label's place; the row is
+    /// "Sort by" and the picker. The last action's outcome, or why actions are unavailable on
+    /// this machine, takes the label's place; the row is
     /// tall enough for two lines, so most messages never move the list, and a three-line one
     /// moves it a little.
     private var sortRow: some View {
         HStack {
             if let outcome = actions.outcome {
                 ActionOutcomeLine(outcome: outcome)
+            } else if let note = actions.unavailableNote {
+                Text(note)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.dimText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("Sort by")
                     .font(.system(size: 11))

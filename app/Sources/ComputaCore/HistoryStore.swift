@@ -20,6 +20,8 @@ public final class HistoryStore {
     public private(set) var range: HistoryRange = .fifteenMinutes
     public private(set) var isOpen = false
     public private(set) var endpoint: DaemonEndpoint
+    /// True while there is no daemon to talk to (a remote machine's tunnel is not up).
+    public private(set) var isSuspended = false
     /// How many fetches have finished, successful or not. For tests and logging.
     public private(set) var fetchCount = 0
 
@@ -36,18 +38,25 @@ public final class HistoryStore {
     public init(
         endpoint: DaemonEndpoint,
         makeClient: @escaping MonitorClientFactory = { DaemonClient(endpoint: $0) },
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: SleepFunction? = nil
     ) {
         self.endpoint = endpoint
         self.makeClient = makeClient
-        self.sleep = sleep
+        self.sleep = sleep ?? realSleep
     }
 
     /// Starts fetching when the dashboard opens and stops when it closes.
     public func setOpen(_ open: Bool) {
         guard open != isOpen else { return }
         isOpen = open
-        if open { restart() } else { stopLoop() }
+        if open, !isSuspended { restart() } else { stopLoop() }
+    }
+
+    /// Pauses fetching while there is no daemon to reach, dropping the series.
+    public func setSuspended(_ suspended: Bool) {
+        guard suspended != isSuspended else { return }
+        isSuspended = suspended
+        if suspended { stopLoop() } else if isOpen { restart() }
     }
 
     /// Switches the chart's time window and fetches at once.
@@ -55,7 +64,7 @@ public final class HistoryStore {
         guard newRange != range else { return }
         range = newRange
         series = nil
-        if isOpen { restart() }
+        if isOpen, !isSuspended { restart() }
     }
 
     /// Switches to another daemon.
@@ -64,7 +73,7 @@ public final class HistoryStore {
         endpoint = newEndpoint
         series = nil
         problem = nil
-        if isOpen { restart() }
+        if isOpen, !isSuspended { restart() }
     }
 
     // MARK: - The loop

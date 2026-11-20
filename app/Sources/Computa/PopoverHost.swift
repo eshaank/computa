@@ -27,7 +27,11 @@ struct PopoverHost: View {
             setPreventSleep: { model.sleep.set(on: $0) },
             openDashboard: { show(WindowID.dashboard, with: openWindow) },
             openPreferences: { show(WindowID.preferences, with: openWindow) },
-            quit: { NSApplication.shared.terminate(nil) }
+            quit: { NSApplication.shared.terminate(nil) },
+            machines: MachineSwitching(
+                select: { model.machines.select($0) },
+                manage: { show(WindowID.preferences, with: openWindow) }
+            )
         )
     }
 

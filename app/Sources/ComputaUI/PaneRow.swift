@@ -31,6 +31,8 @@ struct PaneRow: View {
     let metric: ProcessMetric
     let isExpanded: Bool
     let isBusy: Bool
+    /// False on a machine where actions cannot run.
+    let showsControl: Bool
     let onToggle: () -> Void
     let onClose: () -> Void
 
@@ -57,14 +59,18 @@ struct PaneRow: View {
         .padding(.trailing, 14)
         .frame(minHeight: 38)
         .contextMenu {
-            Button("Close Pane…", action: onClose)
-                .disabled(isBusy)
+            if showsControl {
+                Button("Close Pane…", action: onClose)
+                    .disabled(isBusy)
+            }
         }
     }
 
     @ViewBuilder
     private var control: some View {
-        if isBusy {
+        if !showsControl {
+            RowControlSpace()
+        } else if isBusy {
             RowBusyIndicator()
         } else {
             RowIconButton(symbol: "xmark", label: "Close pane…", hoverTint: Theme.warning, action: onClose)

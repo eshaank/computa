@@ -13,10 +13,13 @@ public struct PopoverContent: Sendable, Equatable {
     /// The "Claude Code" row's value, for example "3 panes · 4.2 GB" (`ClaudeUsage.popoverText`).
     /// Nil hides the row.
     public var claudeSummary: String?
+    /// The machines, the shown one and its tunnel.
+    public var machine: MachineContext
 
     public init(
         state: ConnectionState, sample: SystemSample?, host: HostInfo?, endpoint: DaemonEndpoint,
-        preventSleepOn: Bool, preventSleepError: String?, claudeSummary: String? = nil
+        preventSleepOn: Bool, preventSleepError: String?, claudeSummary: String? = nil,
+        machine: MachineContext = .thisMacOnly
     ) {
         self.state = state
         self.sample = state.isConnected ? sample : nil
@@ -25,6 +28,12 @@ public struct PopoverContent: Sendable, Equatable {
         self.preventSleepOn = preventSleepOn
         self.preventSleepError = preventSleepError
         self.claudeSummary = claudeSummary
+        self.machine = machine
+    }
+
+    /// Prevent Sleep's subtitle: it always acts on the Mac running the app.
+    var preventSleepNote: String? {
+        machine.isRemote ? "Keeps this Mac awake" : nil
     }
 }
 
@@ -34,17 +43,20 @@ public struct PopoverActions: Sendable {
     public var openDashboard: @MainActor @Sendable () -> Void
     public var openPreferences: @MainActor @Sendable () -> Void
     public var quit: @MainActor @Sendable () -> Void
+    public var machines: MachineSwitching
 
     public init(
         setPreventSleep: @escaping @MainActor @Sendable (Bool) -> Void,
         openDashboard: @escaping @MainActor @Sendable () -> Void,
         openPreferences: @escaping @MainActor @Sendable () -> Void,
-        quit: @escaping @MainActor @Sendable () -> Void
+        quit: @escaping @MainActor @Sendable () -> Void,
+        machines: MachineSwitching = .none
     ) {
         self.setPreventSleep = setPreventSleep
         self.openDashboard = openDashboard
         self.openPreferences = openPreferences
         self.quit = quit
+        self.machines = machines
     }
 
     /// Does nothing; for previews and snapshots.
@@ -73,17 +85,12 @@ public struct PopoverView: View {
 
     private var panel: some View {
         VStack(spacing: 0) {
-            if case .daemonNotRunning(let problem) = content.state {
-                DaemonDownSection(problem: problem)
-            } else {
-                RingsSection(sample: content.sample)
-                SectionDivider()
-                StatusRows(content: content)
-            }
+            numbers
             SectionDivider()
             ToggleRow(
                 label: "Prevent Sleep",
                 isOn: content.preventSleepOn,
+                detail: content.preventSleepNote,
                 message: content.preventSleepError,
                 onChange: actions.setPreventSleep
             )
@@ -100,6 +107,34 @@ public struct PopoverView: View {
             .buttonStyle(ThemeButtonStyle())
         }
         .background(PanelShape(cornerRadius: Metrics.panelCornerRadius))
+    }
+
+    /// Rings and rows; or why there are none: the tunnel is down, or the daemon does not
+    /// answer. With more than one machine, the switcher stays at the top in every state.
+    @ViewBuilder
+    private var numbers: some View {
+        let machine = content.machine
+        if case .unreachable = machine.pendingTunnel {
+            switcherRow(detail: machine.remote?.destination ?? "")
+            SectionDivider()
+            TunnelStatusView(machine: machine, state: machine.pendingTunnel ?? .connecting)
+        } else if case .daemonNotRunning(let problem) = content.state {
+            if machine.showsSwitcher {
+                switcherRow(detail: "computad not answering")
+                SectionDivider()
+            }
+            DaemonDownSection(problem: problem)
+        } else {
+            RingsSection(sample: content.sample)
+            SectionDivider()
+            StatusRows(content: content, switching: actions.machines)
+        }
+    }
+
+    private func switcherRow(detail: String) -> some View {
+        MachineSwitcherRow(machine: content.machine, value: nil, detail: detail, switching: actions.machines)
+            .padding(.horizontal, Metrics.sidePadding)
+            .padding(.vertical, 6)
     }
 
     private var bottomCapsule: some View {

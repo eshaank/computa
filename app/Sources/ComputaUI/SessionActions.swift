@@ -8,15 +8,27 @@ public struct SessionActions: Sendable {
     public var busy: Set<RexActionTarget>
     /// The last outcome, shown beside the sort control until it clears.
     public var outcome: RexActionOutcome?
+    /// Set when actions cannot run on the shown machine (a remote one without a Rex host
+    /// label): the controls are hidden and this dim line says why.
+    public var unavailableNote: String?
     public var perform: @MainActor @Sendable (RexAction) -> Void
 
     public init(
-        busy: Set<RexActionTarget>, outcome: RexActionOutcome?, perform: @escaping @MainActor @Sendable (RexAction) -> Void
+        busy: Set<RexActionTarget>, outcome: RexActionOutcome?, unavailableNote: String? = nil,
+        perform: @escaping @MainActor @Sendable (RexAction) -> Void
     ) {
         self.busy = busy
         self.outcome = outcome
+        self.unavailableNote = unavailableNote
         self.perform = perform
     }
+
+    /// No controls, and a line saying why.
+    public static func unavailable(_ note: String) -> SessionActions {
+        SessionActions(busy: [], outcome: nil, unavailableNote: note, perform: { _ in })
+    }
+
+    public var isAvailable: Bool { unavailableNote == nil }
 
     /// Does nothing; for previews and snapshots.
     public static let none = SessionActions(busy: [], outcome: nil, perform: { _ in })
@@ -43,6 +55,13 @@ struct RowIconButton: View {
         .onHover { hovering = $0 }
         .help(label)
         .accessibilityLabel(label)
+    }
+}
+
+/// Keeps a row control's space where actions cannot run, so values stay in their column.
+struct RowControlSpace: View {
+    var body: some View {
+        Color.clear.frame(width: SessionRowMetrics.controlSize, height: SessionRowMetrics.controlSize)
     }
 }
 

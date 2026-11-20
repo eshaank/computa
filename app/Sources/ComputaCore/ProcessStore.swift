@@ -22,6 +22,8 @@ public final class ProcessStore {
     public private(set) var isDashboardOpen = false
     public private(set) var tab: DashboardTab = .cpu
     public private(set) var endpoint: DaemonEndpoint
+    /// True while there is no daemon to talk to (a remote machine's tunnel is not up).
+    public private(set) var isSuspended = false
 
     /// The newest snapshot, only while connected. Never a stale one.
     public var snapshot: ProcessSnapshot? { state.isConnected ? latest : nil }
@@ -39,11 +41,11 @@ public final class ProcessStore {
     public init(
         endpoint: DaemonEndpoint,
         makeClient: @escaping MonitorClientFactory = { DaemonClient(endpoint: $0) },
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: SleepFunction? = nil
     ) {
         self.endpoint = endpoint
         self.makeClient = makeClient
-        self.sleep = sleep
+        self.sleep = sleep ?? realSleep
     }
 
     public func setDashboardOpen(_ open: Bool) {
@@ -72,7 +74,14 @@ public final class ProcessStore {
         stopLoop()
     }
 
-    private var isWanted: Bool { isDashboardOpen && tab.showsProcesses }
+    /// Pauses streaming while there is no daemon to reach, dropping the snapshot.
+    public func setSuspended(_ suspended: Bool) {
+        guard suspended != isSuspended else { return }
+        isSuspended = suspended
+        update()
+    }
+
+    private var isWanted: Bool { !isSuspended && (isDashboardOpen && tab.showsProcesses) }
 
     private func update() {
         if isWanted, loop == nil {

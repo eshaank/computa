@@ -29,6 +29,8 @@ public final class MonitorStore {
     public private(set) var endpoint: DaemonEndpoint
     /// The interval the current stream asked for.
     public private(set) var intervalMilliseconds: UInt32 = closedIntervalMilliseconds
+    /// True while there is no daemon to talk to (a remote machine's tunnel is not up).
+    public private(set) var isSuspended = false
 
     /// The newest sample, only while connected. Never a stale one.
     public var sample: SystemSample? { state.isConnected ? latestSample : nil }
@@ -39,6 +41,7 @@ public final class MonitorStore {
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var openSurfaces: Set<Surface> = []
+    @ObservationIgnored private var isStarted = false
     @ObservationIgnored private let logger = Logger(subsystem: "app.computa.Computa", category: "connection")
 
     /// - Parameters:
@@ -48,20 +51,22 @@ public final class MonitorStore {
     public init(
         endpoint: DaemonEndpoint,
         makeClient: @escaping MonitorClientFactory = { DaemonClient(endpoint: $0) },
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: SleepFunction? = nil
     ) {
         self.endpoint = endpoint
         self.makeClient = makeClient
-        self.sleep = sleep
+        self.sleep = sleep ?? realSleep
     }
 
     /// Starts streaming. Calling it again restarts the stream.
     public func start() {
-        restart()
+        isStarted = true
+        if !isSuspended { restart() }
     }
 
     /// Stops streaming and forgets the latest sample.
     public func stop() {
+        isStarted = false
         generation += 1
         loop?.cancel()
         loop = nil
@@ -77,6 +82,24 @@ public final class MonitorStore {
         logger.info("sample interval \(self.intervalMilliseconds) ms -> \(wanted) ms (open: \(self.openSurfaces.count))")
         intervalMilliseconds = wanted
         if loop != nil { restart() }
+    }
+
+    /// Pauses streaming while there is no daemon to reach, dropping the sample and the facts
+    /// about the machine, so nothing stale shows. Resuming streams again if started.
+    public func setSuspended(_ suspended: Bool) {
+        guard suspended != isSuspended else { return }
+        isSuspended = suspended
+        if suspended {
+            generation += 1
+            loop?.cancel()
+            loop = nil
+            host = nil
+            hostProblem = nil
+            latestSample = nil
+            state = .connecting
+        } else if isStarted {
+            restart()
+        }
     }
 
     /// Switches to another daemon. Facts about the old one are dropped.

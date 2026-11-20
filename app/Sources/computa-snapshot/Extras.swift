@@ -7,6 +7,7 @@ import SwiftUI
 @MainActor
 func renderExtras() throws {
     try renderDashboards()
+    try renderMachines()
     // ImageRenderer draws AppKit-backed controls such as TextField as placeholders, so this
     // view goes through an NSHostingView instead.
     let installed = "/Users/eshaan/" + RexLocator.installPath
@@ -28,12 +29,28 @@ func renderExtras() throws {
 }
 
 @MainActor
-private func preferences(rexCommand: String, lookup: RexLookup) -> PreferencesView {
+func preferences(
+    rexCommand: String, lookup: RexLookup, machines: [Machine] = [.thisMac()], form: MachineForm? = nil
+) -> PreferencesView {
     PreferencesView(
-        current: .local, save: { (text) throws(DaemonEndpointError) in try DaemonEndpoint(parsing: text) },
-        rexCommand: rexCommand, rexLookup: lookup, saveRexCommand: { _ in lookup }
+        machines: machines, editing: previewEditing,
+        rexCommand: rexCommand, rexLookup: lookup, saveRexCommand: { _ in lookup }, form: form
     )
 }
+
+/// Checks like the app does, against an empty list, and stores nothing.
+@MainActor
+let previewEditing = MachineEditing(
+    save: { (draft, _) throws(MachineValidationError) in
+        var list = MachineList()
+        return try list.add(draft)
+    },
+    saveThisMacAddress: { (text) throws(MachineValidationError) in
+        var list = MachineList()
+        return try list.setThisMacAddress(text)
+    },
+    remove: { _ throws(MachineValidationError) in }
+)
 
 /// Renders through an offscreen `NSHostingView`, which draws real AppKit controls.
 @MainActor

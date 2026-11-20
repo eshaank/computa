@@ -42,10 +42,10 @@ public final class RexActionsModel {
     /// - Parameter sleep: Waits before an outcome or a closed pane clears. Tests pass one they control.
     public init(
         runner: any RexActionRunning,
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: SleepFunction? = nil
     ) {
         self.runner = runner
-        self.sleep = sleep
+        self.sleep = sleep ?? realSleep
     }
 
     public func isBusy(_ target: RexActionTarget) -> Bool { busy.contains(target) }

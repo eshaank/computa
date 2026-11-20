@@ -21,8 +21,20 @@ TypeScript" rule and `tsconfig.json` do not apply here. The other global rules d
 
 ## Commands
 
-The `justfile` wraps the common ones: `just build`, `just run` (the daemon), `just probe`,
-`just test`, `just lint`. It adds `~/.cargo/bin` to `PATH` itself. The underlying commands:
+Run `just` to list every recipe. The `justfile` adds `~/.cargo/bin` to `PATH` itself.
+
+| Recipe | What it does |
+|---|---|
+| `just build`, `just test`, `just lint` | Build, test and lint both programs |
+| `just run` | Run the daemon on `127.0.0.1:7300` |
+| `just probe [host:port] [count] [--dashboard]` | Print what a running daemon reports |
+| `just app`, `just open-app` | Build `Computa.app`, and open it in the menu bar |
+| `just snapshots` | Render the app's views to PNG files in `app/.build/snapshots/` |
+| `just install-daemon [--dry-run]`, `just uninstall-daemon` | Add or remove the daemon as a login item |
+| `just install-rex-actions [--remove]` | Add or remove one line in the owner's Rex `init.lua` |
+| `just test-rex-actions` | Run the Rex actions in a throwaway Rex session |
+
+The underlying commands:
 
 ```sh
 # Daemon
@@ -36,14 +48,21 @@ cargo fmt --check
 cd app
 swift build
 swift test
-swift run computa-probe [host:port] [count]   # prints ticks from a running daemon
+swift run computa-probe [host:port] [count]   # prints what a running daemon reports
+swift run computa-snapshot                    # renders the views to PNG files, no screen needed
 ```
 
 ## Rules specific to this project
 
 - **The daemon's API is read-only.** Any program on the machine can reach a localhost port. Anything
   that changes the machine is a Rex action in `rex/computa.lua`, not a daemon call.
-- **The daemon listens on `127.0.0.1` only.** Remote access goes through `rex forward`.
+- **The daemon listens on `127.0.0.1` only.** The app reaches a daemon on another Mac through an
+  SSH tunnel that it starts itself.
+- **Never change the owner's machine without being asked.** Do not edit their Rex `init.lua`, run
+  `rex config reload`, or install the login item. Those are the owner's steps, through the `just`
+  recipes. Try Rex actions only in a throwaway session (`rex new …`, then `rex kill`).
+- **Nobody can see the screen.** Check UI by rendering it offscreen (`just snapshots`) and reading
+  the PNG files, and say plainly what was not seen running.
 - **Rex reference:** the `rex` skill in `.claude/skills/rex/`. Check it before using any Rex
   command, method or event.
 - **Files stay under 300 lines, functions under 50.** Split modules before they reach the limit.

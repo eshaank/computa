@@ -43,6 +43,8 @@ final class FakeMonitorClient: MonitorClient {
         var sessionScript: [FakeSessionStream] = [.sendThenHang([Fixtures.sessions])]
         var sessionIntervals: [UInt32] = []
         var activeSessionStreams = 0
+        var icons: [String: Result<Data, RPCError>] = [:]
+        var iconRequests: [String] = []
     }
 
     private let state: Mutex<State>
@@ -89,6 +91,24 @@ final class FakeMonitorClient: MonitorClient {
     }
 
     func host() async throws -> HostInfo { Fixtures.host }
+
+    /// One entry per `appIcon` call, by bundle path.
+    var iconRequests: [String] { state.withLock { $0.iconRequests } }
+
+    /// Sets what `appIcon` answers for a path; unknown paths get empty data ("no icon").
+    func scriptIcon(_ path: String, _ result: Result<Data, RPCError>) {
+        state.withLock { $0.icons[path] = result }
+    }
+
+    func appIcon(bundlePath: String) async throws -> Data {
+        let result = state.withLock { state in
+            state.iconRequests.append(bundlePath)
+            return state.icons[bundlePath] ?? .success(Data())
+        }
+        // Yields, so a second request made meanwhile would overlap this one.
+        try await Task.sleep(for: .milliseconds(20))
+        return try result.get()
+    }
 
     func history(windowSeconds: UInt32, maxPoints: UInt32) async throws -> HistorySeries {
         let result = state.withLock { state in

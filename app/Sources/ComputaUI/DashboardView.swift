@@ -17,12 +17,15 @@ public struct DashboardContent: Sendable, Equatable {
     public var sessionsState: ConnectionState
     /// Only kept while the sessions stream is connected.
     public var sessions: SessionsSnapshot?
+    /// The machines, the shown one and its tunnel.
+    public var machine: MachineContext
 
     public init(
         state: ConnectionState, sample: SystemSample?, host: HostInfo?, endpoint: DaemonEndpoint,
         history: HistorySeries?, historyProblem: DaemonProblem?,
         processState: ConnectionState, processes: ProcessSnapshot?,
-        sessionsState: ConnectionState = .connecting, sessions: SessionsSnapshot? = nil
+        sessionsState: ConnectionState = .connecting, sessions: SessionsSnapshot? = nil,
+        machine: MachineContext = .thisMacOnly
     ) {
         self.state = state
         self.sample = state.isConnected ? sample : nil
@@ -34,6 +37,7 @@ public struct DashboardContent: Sendable, Equatable {
         self.processes = processState.isConnected ? processes : nil
         self.sessionsState = sessionsState
         self.sessions = sessionsState.isConnected ? sessions : nil
+        self.machine = machine
     }
 }
 
@@ -49,11 +53,12 @@ public struct DashboardView: View {
     @Binding var sessionsView: SessionsViewState
     let icons: any AppIconProviding
     let sessionActions: SessionActions
+    let machines: MachineSwitching
 
     public init(
         content: DashboardContent, tab: Binding<DashboardTab>, range: Binding<HistoryRange>,
         query: Binding<String>, expanded: Binding<Set<String>>, sessionsView: Binding<SessionsViewState>,
-        icons: any AppIconProviding, sessionActions: SessionActions = .none
+        icons: any AppIconProviding, sessionActions: SessionActions = .none, machines: MachineSwitching = .none
     ) {
         self.content = content
         _tab = tab
@@ -63,22 +68,20 @@ public struct DashboardView: View {
         _sessionsView = sessionsView
         self.icons = icons
         self.sessionActions = sessionActions
+        self.machines = machines
     }
 
     public var body: some View {
         VStack(spacing: 12) {
             DashboardTabBar(tab: $tab)
                 .padding(.top, 14)
-            switch content.state {
-            case .connected:
-                connectedBody
-            case .connecting:
-                ConnectingPanel(endpoint: content.endpoint)
-                Spacer(minLength: 0)
-            case .daemonNotRunning(let problem):
-                DaemonDownSection(problem: problem)
+            if let tunnel = content.machine.pendingTunnel {
+                infoLine
+                TunnelStatusView(machine: content.machine, state: tunnel)
                     .background(DashboardPanel())
                 Spacer(minLength: 0)
+            } else {
+                stateBody
             }
         }
         .padding(.horizontal, DashboardMetrics.sidePadding)
@@ -89,6 +92,25 @@ public struct DashboardView: View {
         )
         .background(Theme.background)
         .environment(\.colorScheme, .dark)
+    }
+
+    /// Numbers while connected; otherwise why not. The host line stays when there is a machine
+    /// to switch to.
+    @ViewBuilder
+    private var stateBody: some View {
+        switch content.state {
+        case .connected:
+            connectedBody
+        case .connecting:
+            if content.machine.showsSwitcher { infoLine }
+            ConnectingPanel(endpoint: content.endpoint, machine: content.machine)
+            Spacer(minLength: 0)
+        case .daemonNotRunning(let problem):
+            if content.machine.showsSwitcher { infoLine }
+            DaemonDownSection(problem: problem)
+                .background(DashboardPanel())
+            Spacer(minLength: 0)
+        }
     }
 
     @ViewBuilder
@@ -105,28 +127,46 @@ public struct DashboardView: View {
             SessionsTabView(
                 state: content.sessionsState, snapshot: content.sessions, view: $sessionsView, actions: sessionActions
             )
+            // A close confirmation belongs to the machine it was asked on; a switch drops it.
+            .id(content.machine.selectedID)
         }
     }
 
-    /// The machine on the left, the range picker on the right.
+    /// The machine on the left (a menu when there are several), the range picker on the right.
     private var infoLine: some View {
-        HStack(spacing: 8) {
-            if let host = content.host {
-                Text(host.hostname)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text(host.chip)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.dimText)
-                    .lineLimit(1)
+        let showsRange = tab.showsHistory && content.state.isConnected && content.machine.pendingTunnel == nil
+        return HStack(spacing: 8) {
+            if content.machine.showsSwitcher {
+                MachineMenu(machine: content.machine, switching: machines) {
+                    HStack(spacing: 8) {
+                        MachineTitle(name: content.machine.name, font: .system(size: 12, weight: .semibold))
+                        hostText
+                    }
+                }
+            } else {
+                hostText
             }
             Spacer(minLength: 8)
             // Hidden rather than removed on the Sessions tab, so the line keeps its height.
             RangePicker(range: $range, tint: tab.color)
-                .opacity(tab.showsHistory ? 1 : 0)
-                .allowsHitTesting(tab.showsHistory)
-                .accessibilityHidden(!tab.showsHistory)
+                .opacity(showsRange ? 1 : 0)
+                .allowsHitTesting(showsRange)
+                .accessibilityHidden(!showsRange)
+        }
+    }
+
+    /// The daemon's host name and chip; with several machines the name is dim, after the menu.
+    @ViewBuilder
+    private var hostText: some View {
+        if let host = content.host {
+            Text(host.hostname)
+                .font(.system(size: content.machine.showsSwitcher ? 11 : 12, weight: content.machine.showsSwitcher ? .regular : .semibold))
+                .foregroundStyle(content.machine.showsSwitcher ? Theme.dimText : Theme.text)
+                .lineLimit(1)
+            Text(host.chip)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.dimText)
+                .lineLimit(1)
         }
     }
 
@@ -179,52 +219,5 @@ public struct DashboardView: View {
             return problem.kind == .unsupported ? "The daemon needs an update to show history." : problem.summary
         }
         return content.history == nil ? "Loading history…" : "No history yet."
-    }
-}
-
-/// Colour keys for the chart's parts with their live values, and the tab's headline number.
-struct ChartLegend: View {
-    let entries: [LegendEntry]
-    let headline: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ForEach(entries) { entry in
-                HStack(spacing: 5) {
-                    Circle().fill(entry.color).frame(width: 7, height: 7)
-                    Text(entry.label).foregroundStyle(Theme.dimText)
-                    Text(entry.value).foregroundStyle(Theme.text.opacity(0.85))
-                }
-            }
-            Spacer(minLength: 4)
-            Text(headline)
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(Theme.text)
-        }
-        .font(.system(size: 11).monospacedDigit())
-        .lineLimit(1)
-        .padding(.horizontal, 4)
-    }
-}
-
-/// Shown below the tabs until the first sample arrives.
-struct ConnectingPanel: View {
-    let endpoint: DaemonEndpoint
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 26, weight: .light))
-                .foregroundStyle(Theme.dimText)
-            Text("Connecting…")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.text)
-            Text("Waiting for computad at \(endpoint.description).")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
-        .background(DashboardPanel())
     }
 }

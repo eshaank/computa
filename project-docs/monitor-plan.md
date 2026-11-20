@@ -132,6 +132,47 @@ Lua.
 - Not checked: the buttons in the running app, and the actions as loaded by the Rex server from
   your config (they were run from a script, which uses the same code).
 
+## Phase 6 result (2026-11-20)
+
+The app can watch a daemon on another Mac. **None of it has run against the real M1.** Remote
+Login is off on this Mac and the M1 could not be reached, so real `ssh` was never run.
+
+- Built: a machine list in Preferences, a switcher in the popover and dashboard, an SSH tunnel the
+  app starts and restarts by itself, app icons fetched from the remote daemon, and Rex actions
+  sent with `rex -S <label>`.
+- Checked by machine:
+  - The real tunnel supervisor, with a stand-in for `ssh` that forwards a port to a real daemon:
+    the app's real client received the host, live samples, history and an app icon through it,
+    and switching back to This Mac stopped the forwarder.
+  - The daemon's icon call returned a correct icon for all 87 apps on this Mac.
+  - The exact `ssh` arguments, the retry delays (1, 2, 4, 8, 15 s), and a destination that could
+    be read as an ssh option being refused before anything starts.
+  - Daemon: 130 tests. App: 170 tests.
+- The tunnel uses plain `ssh`, not `rex forward`, which the installed Rex does not have. It sits
+  behind one interface, so a `rex forward` version can be added later.
+- A crash from phase 3 was found and fixed here: closing the dashboard while it waited between
+  history fetches crashed in tests. Pull requests 3 to 5 still contain it; it is fixed from this
+  pull request on.
+
+### What to do on the M1
+
+1. On the M1: System Settings → General → Sharing → turn on Remote Login.
+2. On this Mac: `ssh-copy-id you@<M1 NetBird address>`. Then
+   `ssh -o BatchMode=yes you@<address> true` must succeed without asking for anything. The app
+   cannot type a password.
+3. On the M1: clone this repository, install Rust and protobuf (see the end of this plan), and run
+   `just install-daemon`.
+4. In Computa on this Mac: Preferences → Add Machine. Name it, give `you@<address>` as the SSH
+   destination, and leave the daemon port at 7300. Add a Rex host label only if `rex -S <label>`
+   already works from this Mac.
+5. Pick the M1 in the popover's machine menu. Expect "Connecting…", then the M1's numbers within
+   about 2 seconds.
+6. Disconnect NetBird. Expect "unreachable" within about 45 seconds, and recovery by itself after
+   reconnecting.
+
+The two open questions from the plan are still open: whether the M1's Rex server keeps running
+without Rex.app open, and whether `rex -S` works over its NetBird address.
+
 ## RPC: what it is here and what it is not
 
 RPC is the language the app and daemon speak. It is not how the bytes travel. For the M1, the bytes

@@ -30,8 +30,9 @@ struct ComputaApp: App {
 
         Window("Computa Preferences", id: WindowID.preferences) {
             PreferencesView(
-                current: model.store.endpoint,
-                save: { (text) throws(DaemonEndpointError) in try model.saveAddress(text) },
+                machines: model.machines.list.machines,
+                editing: model.machineEditing,
+                storeProblem: model.machines.saveProblem,
                 rexCommand: model.rexSetting.path,
                 rexLookup: model.rexSetting.lookup(),
                 saveRexCommand: { model.saveRexCommand($0) }

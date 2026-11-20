@@ -20,6 +20,7 @@ struct SessionListView: View {
                     SessionRow(
                         session: session, metric: metric, isExpanded: expanded.contains(session.id),
                         isBusy: actions.busy.contains(.session(session.id)),
+                        showsControl: actions.isAvailable,
                         onToggle: { toggle(session.id) },
                         onOpenViewer: { actions.perform(.openProcessViewer(sessionID: session.id)) }
                     )
@@ -45,6 +46,7 @@ struct SessionListView: View {
                 PaneRow(
                     pane: pane, metric: metric, isExpanded: expanded.contains(pane.id),
                     isBusy: actions.busy.contains(.pane(pane.id)),
+                    showsControl: actions.isAvailable,
                     onToggle: { if !pane.processes.isEmpty { toggle(pane.id) } },
                     onClose: { requestClose(PaneCloseRequest(pane: pane, sessionID: session.id, sessionLabel: session.label)) }
                 )
@@ -86,6 +88,8 @@ struct SessionRow: View {
     let metric: ProcessMetric
     let isExpanded: Bool
     let isBusy: Bool
+    /// False on a machine where actions cannot run.
+    let showsControl: Bool
     let onToggle: () -> Void
     let onOpenViewer: () -> Void
 
@@ -114,7 +118,9 @@ struct SessionRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             Group {
-                if isBusy {
+                if !showsControl {
+                    RowControlSpace()
+                } else if isBusy {
                     RowBusyIndicator()
                 } else {
                     RowIconButton(
@@ -127,8 +133,10 @@ struct SessionRow: View {
         .padding(.horizontal, 14)
         .frame(height: DashboardMetrics.rowHeight)
         .contextMenu {
-            Button("Open Process Viewer", action: onOpenViewer)
-                .disabled(isBusy)
+            if showsControl {
+                Button("Open Process Viewer", action: onOpenViewer)
+                    .disabled(isBusy)
+            }
         }
     }
 }

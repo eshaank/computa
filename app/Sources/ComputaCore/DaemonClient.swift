@@ -1,3 +1,4 @@
+import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
@@ -41,6 +42,12 @@ public protocol MonitorClient: Sendable {
         intervalMilliseconds: UInt32,
         onSnapshot: @escaping @Sendable (SessionsSnapshot) async -> Bool
     ) async throws
+
+    /// An app's icon as PNG data, at most 128 pixels on a side. Empty when the daemon has no
+    /// icon for the bundle.
+    ///
+    /// - Parameter bundlePath: A bundle on the daemon's machine, ending in ".app".
+    func appIcon(bundlePath: String) async throws -> Data
 }
 
 /// Makes a client for an address. The store makes a fresh one per connection attempt, so a
@@ -120,6 +127,16 @@ public struct DaemonClient: MonitorClient {
                 }
             }
         }
+    }
+
+    /// - Throws: The gRPC error if the daemon cannot be reached, does not offer the call, or
+    ///   rejects the path.
+    public func appIcon(bundlePath: String) async throws -> Data {
+        let request = Computa_V1_GetAppIconRequest.with { $0.bundlePath = bundlePath }
+        let message = try await withMonitor { monitor in
+            try await monitor.getAppIcon(request)
+        }
+        return message.png
     }
 
     private func withMonitor<Result: Sendable>(

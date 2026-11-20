@@ -37,15 +37,26 @@ struct InfoRow: View {
 struct ToggleRow: View {
     let label: String
     let isOn: Bool
+    /// A dim line under the label.
+    var detail: String?
     var message: String?
     let onChange: @MainActor @Sendable (Bool) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Toggle(isOn: Binding(get: { isOn }, set: { newValue in onChange(newValue) })) {
-                Text(label)
-                    .font(.rowLabel)
-                    .foregroundStyle(Theme.text)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.rowLabel)
+                        .foregroundStyle(Theme.text)
+                    if let detail {
+                        Text(detail)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.dimText)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .toggleStyle(ThemeSwitchStyle())
             if let message {
