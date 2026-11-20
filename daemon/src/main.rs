@@ -2,15 +2,21 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use tokio::net::TcpListener;
+use tokio::signal::unix::{SignalKind, signal};
+use tokio::sync::Notify;
 
+use computad::processes::ProcessMonitor;
 use computad::sampler::Sampler;
 use computad::{DEFAULT_LISTEN_ADDR, rpc};
 
 /// Overrides the listen address, for example `127.0.0.1:7301`.
 const LISTEN_ENV: &str = "COMPUTAD_LISTEN";
+/// How long open client streams may delay stopping.
+const SHUTDOWN_GRACE: Duration = Duration::from_millis(500);
 
 /// Two workers are plenty for a handful of local clients and keep memory low.
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -22,15 +28,32 @@ async fn main() -> anyhow::Result<()> {
     let sampler = Arc::new(Sampler::start().inspect_err(|error| {
         tracing::error!(error = format!("{error:#}"), "could not start sampling")
     })?);
+    let processes = ProcessMonitor::darwin();
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("could not listen on {addr}"))?;
     tracing::info!(%addr, version = env!("CARGO_PKG_VERSION"), "computad is listening");
 
-    rpc::serve(listener, sampler, shutdown_signal())
-        .await
-        .inspect_err(|error| tracing::error!(%error, "the gRPC server stopped with an error"))
-        .context("the gRPC server failed")?;
+    let stopping = Arc::new(Notify::new());
+    let signal = {
+        let stopping = Arc::clone(&stopping);
+        async move {
+            shutdown_signal().await;
+            stopping.notify_one();
+        }
+    };
+    // Open streams never end on their own, so a graceful shutdown would wait
+    // for clients forever. Give them a moment, then stop regardless.
+    let grace = async {
+        stopping.notified().await;
+        tokio::time::sleep(SHUTDOWN_GRACE).await;
+    };
+    tokio::select! {
+        result = rpc::serve(listener, sampler, processes, signal) => result
+            .inspect_err(|error| tracing::error!(%error, "the gRPC server stopped with an error"))
+            .context("the gRPC server failed")?,
+        () = grace => tracing::info!("clients were still connected; closing their streams"),
+    }
 
     tracing::info!("computad stopped");
     Ok(())
@@ -42,12 +65,26 @@ fn listen_addr() -> anyhow::Result<SocketAddr> {
         .with_context(|| format!("{LISTEN_ENV} is not a valid address: {raw:?}"))
 }
 
-/// Completes when the daemon is asked to stop with Ctrl-C.
+/// Completes when the daemon is asked to stop: Ctrl-C in a terminal, or
+/// SIGTERM, which launchd sends.
 async fn shutdown_signal() {
-    if let Err(error) = tokio::signal::ctrl_c().await {
-        tracing::error!(%error, "could not listen for Ctrl-C; stopping now");
-    } else {
-        tracing::info!("received Ctrl-C; shutting down");
+    let terminate = async {
+        match signal(SignalKind::terminate()) {
+            Ok(mut stream) => {
+                stream.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(%error, "could not listen for SIGTERM; only Ctrl-C stops the daemon");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => match result {
+            Ok(()) => tracing::info!("received Ctrl-C; shutting down"),
+            Err(error) => tracing::error!(%error, "could not listen for Ctrl-C; stopping now"),
+        },
+        () = terminate => tracing::info!("received SIGTERM; shutting down"),
     }
 }
 

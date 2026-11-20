@@ -20,7 +20,17 @@ pub const kIOMainPortDefault: mach_port_t = 0;
 /// The registry plane that holds drivers and their providers.
 pub const kIOServicePlane: &[u8] = b"IOService\0";
 
+/// `mach_timebase_info_data_t`: nanoseconds = Mach ticks * numer / denom.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct mach_timebase_info_data_t {
+    pub numer: u32,
+    pub denom: u32,
+}
+
 unsafe extern "C" {
+    /// `libc` marks this deprecated in favour of `mach2`; it is stable API.
+    pub fn mach_timebase_info(info: *mut mach_timebase_info_data_t) -> libc::kern_return_t;
     /// `libc` marks this deprecated in favour of `mach2`; it is stable API.
     pub fn mach_host_self() -> mach_port_t;
     /// The task's own port; `mach_task_self()` in C is a macro reading this.

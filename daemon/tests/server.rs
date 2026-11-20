@@ -8,6 +8,7 @@ use computad::pb::monitor_client::MonitorClient;
 use computad::pb::{
     GetHistoryRequest, GetHostRequest, History, Host, SystemSample, WatchSystemRequest,
 };
+use computad::processes::ProcessMonitor;
 use computad::rpc;
 use computad::sampler::Sampler;
 use tokio::net::TcpListener;
@@ -15,6 +16,7 @@ use tonic::transport::Channel;
 
 async fn start() -> (MonitorClient<Channel>, tokio::sync::oneshot::Sender<()>) {
     let sampler = Arc::new(Sampler::start().expect("sampler starts"));
+    let processes = ProcessMonitor::darwin();
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr = listener.local_addr().expect("local addr");
     let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
@@ -22,7 +24,7 @@ async fn start() -> (MonitorClient<Channel>, tokio::sync::oneshot::Sender<()>) {
         let shutdown = async {
             let _ = stop_rx.await;
         };
-        rpc::serve(listener, sampler, shutdown)
+        rpc::serve(listener, sampler, processes, shutdown)
             .await
             .expect("server runs");
     });
