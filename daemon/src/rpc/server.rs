@@ -4,38 +4,41 @@ use std::future::Future;
 use std::pin::Pin;
 
 use tokio::net::TcpListener;
-use tokio_stream::wrappers::{IntervalStream, TcpListenerStream};
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::Stream;
+use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-use super::ticks::{clamp_interval, make_tick};
 use crate::pb::monitor_server::{Monitor, MonitorServer};
-use crate::pb::{Tick, WatchTicksRequest};
+use crate::pb::{
+    GetHistoryRequest, GetHostRequest, History, Host, SystemSample, WatchSystemRequest,
+};
 
-type TickStream = Pin<Box<dyn Stream<Item = Result<Tick, Status>> + Send>>;
+type SampleStream = Pin<Box<dyn Stream<Item = Result<SystemSample, Status>> + Send>>;
 
 #[derive(Debug, Default)]
 struct MonitorService;
 
 #[tonic::async_trait]
 impl Monitor for MonitorService {
-    type WatchTicksStream = TickStream;
+    type WatchSystemStream = SampleStream;
 
-    async fn watch_ticks(
+    async fn get_host(&self, _request: Request<GetHostRequest>) -> Result<Response<Host>, Status> {
+        Err(Status::unimplemented("GetHost is not implemented yet"))
+    }
+
+    async fn watch_system(
         &self,
-        request: Request<WatchTicksRequest>,
-    ) -> Result<Response<Self::WatchTicksStream>, Status> {
-        let peer = request.remote_addr();
-        let interval = clamp_interval(request.into_inner().interval_ms);
-        tracing::info!(?peer, ?interval, "client started watching ticks");
+        _request: Request<WatchSystemRequest>,
+    ) -> Result<Response<Self::WatchSystemStream>, Status> {
+        Err(Status::unimplemented("WatchSystem is not implemented yet"))
+    }
 
-        let mut sequence = 0_u64;
-        let ticks = IntervalStream::new(tokio::time::interval(interval)).map(move |_| {
-            sequence += 1;
-            Ok(make_tick(sequence))
-        });
-        Ok(Response::new(Box::pin(ticks)))
+    async fn get_history(
+        &self,
+        _request: Request<GetHistoryRequest>,
+    ) -> Result<Response<History>, Status> {
+        Err(Status::unimplemented("GetHistory is not implemented yet"))
     }
 }
 

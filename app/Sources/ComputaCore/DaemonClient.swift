@@ -9,40 +9,56 @@ public struct DaemonClient: Sendable {
         self.endpoint = endpoint
     }
 
-    /// Streams ticks from the daemon, calling `onTick` for each one.
+    /// Facts about the machine the daemon runs on.
     ///
-    /// Returns after `limit` ticks, or when the daemon ends the stream.
+    /// - Throws: The gRPC error if the daemon cannot be reached or the call fails.
+    package func host() async throws -> Computa_V1_Host {
+        try await withMonitor { monitor in
+            try await monitor.getHost(Computa_V1_GetHostRequest())
+        }
+    }
+
+    /// Streams system samples from the daemon, calling `onSample` for each one.
+    ///
+    /// Returns after `limit` samples, or when the daemon ends the stream.
     ///
     /// - Parameters:
-    ///   - intervalMilliseconds: Time between ticks. Zero means the daemon's default.
-    ///   - limit: How many ticks to read before stopping.
-    /// - Returns: The number of ticks received.
+    ///   - intervalMilliseconds: Time between samples. Zero means the daemon's own interval.
+    ///   - limit: How many samples to read before stopping.
+    /// - Returns: The number of samples received.
     /// - Throws: The gRPC error if the daemon cannot be reached or the stream fails.
     @discardableResult
-    public func watchTicks(
+    package func watchSystem(
         intervalMilliseconds: UInt32 = 0,
         limit: Int,
-        onTick: @Sendable @escaping (Tick) -> Void
+        onSample: @Sendable @escaping (Computa_V1_SystemSample) -> Void
     ) async throws -> Int {
-        let request = Computa_V1_WatchTicksRequest.with {
+        let request = Computa_V1_WatchSystemRequest.with {
             $0.intervalMs = intervalMilliseconds
         }
-        return try await withGRPCClient(
-            transport: .http2NIOPosix(
-                target: .dns(host: endpoint.host, port: endpoint.port),
-                transportSecurity: .plaintext
-            )
-        ) { client in
-            let monitor = Computa_V1_Monitor.Client(wrapping: client)
-            return try await monitor.watchTicks(request) { response in
+        return try await withMonitor { monitor in
+            try await monitor.watchSystem(request) { response in
                 var received = 0
-                for try await message in response.messages {
-                    onTick(Tick(message))
+                for try await sample in response.messages {
+                    onSample(sample)
                     received += 1
                     if received >= limit { break }
                 }
                 return received
             }
+        }
+    }
+
+    private func withMonitor<Result: Sendable>(
+        _ body: @Sendable @escaping (Computa_V1_Monitor.Client<HTTP2ClientTransport.Posix>) async throws -> Result
+    ) async throws -> Result {
+        try await withGRPCClient(
+            transport: .http2NIOPosix(
+                target: .dns(host: endpoint.host, port: endpoint.port),
+                transportSecurity: .plaintext
+            )
+        ) { client in
+            try await body(Computa_V1_Monitor.Client(wrapping: client))
         }
     }
 }
