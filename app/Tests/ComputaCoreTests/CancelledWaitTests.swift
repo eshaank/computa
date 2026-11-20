@@ -69,4 +69,23 @@ import Testing
         #expect(!store.isStreaming)
         #expect(fake.sessionIntervals.count == 1)
     }
+
+    @Test func aNewOutcomeDuringTheClearWaitReplacesTheOldOne() async throws {
+        let runner = FakeRexRunner()
+        let model = RexActionsModel(runner: runner)
+        let first = model.run(.openProcessViewer(sessionID: "session:01a1"))
+        try await eventually("first running") { runner.waitingCount == 1 }
+        runner.finish(.success(.openedProcessViewer(program: "/usr/bin/top", windowID: "window:1")))
+        await first?.value
+        #expect(model.outcome?.succeeded == true)
+        try await Task.sleep(for: .milliseconds(50))
+
+        // The first outcome's clear wait is still running; a second outcome cancels it.
+        let second = model.run(.openProcessViewer(sessionID: "session:01a1"))
+        try await eventually("second running") { runner.waitingCount == 1 }
+        runner.finish(.failure(.actionsNotInstalled))
+        await second?.value
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.outcome?.succeeded == false)
+    }
 }
