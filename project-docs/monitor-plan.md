@@ -55,6 +55,18 @@ The daemon reports real numbers. Checked on this Mac (an M4 Pro, 24 GB) under he
 - Not exercised: a Mac with no battery, a Mac with one kind of core, and memory pressure at
   normal or critical (this Mac sat at "warning" throughout).
 
+## Phase 2 result (2026-11-20)
+
+The menu bar app exists: popover, Prevent Sleep, a stand-in dashboard window and Preferences.
+
+- Checked by machine: 44 tests pass, including the reconnect loop and Prevent Sleep against the
+  real macOS power API. The app's client read live samples from the real daemon. The views were
+  rendered offscreen and compared with the reference screenshot.
+- Not checked: anything that needs the app on screen. Nobody has seen it running in the menu bar
+  yet. The hand-checks are listed in pull request 2.
+- The popover adds a figure under each ring, which the reference does not have, so the numbers can
+  be compared with the daemon's.
+
 ## RPC: what it is here and what it is not
 
 RPC is the language the app and daemon speak. It is not how the bytes travel. For the M1, the bytes
