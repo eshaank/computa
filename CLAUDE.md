@@ -75,9 +75,10 @@ swift run computa-snapshot                    # renders the views to PNG files, 
   never show one under a bare "Mem" or "Memory" heading.
 - **The app needs macOS 26 or later**, for Liquid Glass. Use native SwiftUI controls and the
   semantic text styles (`.body`, `.headline`, `.caption` …), not `.system(size:)`.
-- **Glass does not draw offscreen.** The snapshot tool turns it off (`drawsGlass`), so the PNGs
-  show a plain stand-in for the popover and the toolbar's selected tab. Only the owner, on
-  screen, can judge glass.
+- **Glass does not draw offscreen.** A glass view renders as a blank image, so the snapshot tool
+  turns glass off for the popover (`drawsGlass`) and the PNGs show a plain stand-in. The
+  toolbar's selected tab also renders as a white pill with no label; that is probably the same
+  thing but has not been confirmed. Only the owner, on screen, can judge either.
 - **Glow is one setting:** `Glow` in `app/Sources/ComputaUI/Theme.swift`. Use `.glow(color)`,
   not a hand-written `.shadow`.
 - **Files stay under 300 lines, functions under 50.** Split modules before they reach the limit.

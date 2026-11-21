@@ -1,10 +1,10 @@
 # Computa monitor: build plan
 
-Status as of 2026-11-20: phases 0 to 6 are built. Phases 0 and 1 are on `main`; phases 2 to 6
-are pull requests 2 to 6, each stacked on the one before. Pull request 7 was a first attempt at a
-crash fix and did not hold; the working fix is on the phase 6 branch only (see "Phase 6 result").
-Phase 6 is a draft because it has not run against the real M1. The owner has run the app on
-screen once, which is how the crash was found.
+Status as of 2026-11-21: phases 0 to 6 are built. `main` holds phases 0 and 1. Pull requests 2
+to 5 and 7 are merged, each into the branch below it, not into `main`. Pull request 6 is open
+and is where work continues: it holds the crash fix that works (pull request 7's did not) and
+the changes made after the owner first ran the app (see "After the owner first ran it").
+Phase 6 is a draft because it has not run against the real M1.
 The "result" sections below say what was checked for each phase.
 
 ## Phase 0 result (2026-11-19)
