@@ -50,23 +50,26 @@ extension Fixtures {
     )
 }
 
-/// Builds fixture sessions whose totals add up from their panes, as the daemon's do.
+/// Builds fixture sessions whose totals add up from their panes, as the daemon's do. Resident
+/// sizes are about 70% of footprints, as on a Mac that compresses memory, so a render that shows
+/// the wrong one is visibly wrong.
 enum SessionBuilder {
     private static let megabyte: UInt64 = 1 << 20
+    private static let residentShare = 0.7
 
     static func session(_ label: String, id: String, tabs: [RexTab]) -> RexSession {
         RexSession(
             id: id, label: label, cpuPercent: tabs.reduce(0) { $0 + $1.cpuPercent },
-            memoryBytes: tabs.reduce(0) { $0 + $1.memoryBytes }, processCount: tabs.reduce(0) { $0 + $1.processCount },
-            tabs: tabs
+            memoryBytes: tabs.reduce(0) { $0 + $1.memoryBytes }, residentBytes: tabs.reduce(0) { $0 + $1.residentBytes },
+            processCount: tabs.reduce(0) { $0 + $1.processCount }, tabs: tabs
         )
     }
 
     static func tab(_ label: String, id: String, panes: [RexPane]) -> RexTab {
         RexTab(
             id: id, label: label, cpuPercent: panes.reduce(0) { $0 + $1.cpuPercent },
-            memoryBytes: panes.reduce(0) { $0 + $1.memoryBytes }, processCount: panes.reduce(0) { $0 + $1.processCount },
-            panes: panes
+            memoryBytes: panes.reduce(0) { $0 + $1.memoryBytes }, residentBytes: panes.reduce(0) { $0 + $1.residentBytes },
+            processCount: panes.reduce(0) { $0 + $1.processCount }, panes: panes
         )
     }
 
@@ -94,15 +97,17 @@ enum SessionBuilder {
         let processes = zip(names.indices, zip(names, weights)).map { index, entry -> ProcessEntry in
             let (name, weight) = entry
             let pid = base + Int32(index) * 7
+            let footprint = Double(memory * megabyte) * weight / sum
             return ProcessEntry(
                 pid: pid, parentPid: index == 0 ? base - 7 : base, name: name, path: "/usr/local/bin/\(name)",
-                cpuPercent: cpu * weight / sum, memoryBytes: UInt64(Double(memory * megabyte) * weight / sum),
-                residentBytes: UInt64(Double(memory * megabyte) * weight / sum)
+                cpuPercent: cpu * weight / sum, memoryBytes: UInt64(footprint),
+                residentBytes: UInt64(footprint * residentShare)
             )
         }
         return RexPane(
             id: id, label: program, cpuPercent: processes.reduce(0) { $0 + $1.cpuPercent },
-            memoryBytes: processes.reduce(0) { $0 + $1.memoryBytes }, processCount: processes.count,
+            memoryBytes: processes.reduce(0) { $0 + $1.memoryBytes },
+            residentBytes: processes.reduce(0) { $0 + $1.residentBytes }, processCount: processes.count,
             kind: kind, program: program, workingDirectory: directory, processes: processes
         )
     }

@@ -7,13 +7,14 @@ private func process(_ name: String, pid: Int32, cpu: Double, memory: UInt64) ->
     ProcessEntry(pid: pid, parentPid: 1, name: name, path: "", cpuPercent: cpu, memoryBytes: memory, residentBytes: 0)
 }
 
+/// `memory` is the footprint; the resident size is `resident`, else the same as the footprint.
 private func pane(
-    _ id: String, _ program: String, cpu: Double, memory: UInt64, kind: PaneKind = .program,
+    _ id: String, _ program: String, cpu: Double, memory: UInt64, resident: UInt64? = nil, kind: PaneKind = .program,
     processes: [ProcessEntry] = []
 ) -> RexPane {
     RexPane(
-        id: id, label: "", cpuPercent: cpu, memoryBytes: memory, processCount: processes.count, kind: kind,
-        program: program, workingDirectory: "", processes: processes
+        id: id, label: "", cpuPercent: cpu, memoryBytes: memory, residentBytes: resident ?? memory,
+        processCount: processes.count, kind: kind, program: program, workingDirectory: "", processes: processes
     )
 }
 
@@ -71,6 +72,16 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
         #expect(byCpu.tabs[0].panes[1].processes.map(\.pid) == [7, 9, 5])
     }
 
+    @Test func memorySortsByResidentSizeNotFootprint() {
+        // "swapped" has the larger footprint but less in RAM.
+        let swapped = session("s:swapped", "swapped", cpu: 0, memory: 0, tabs: [[pane("p:1", "a", cpu: 0, memory: 9_000, resident: 100)]])
+        let busy = session("s:busy", "busy", cpu: 0, memory: 0, tabs: [[pane("p:2", "b", cpu: 0, memory: 1_000, resident: 800)]])
+        #expect(SessionList.sorted([swapped, busy], by: .memory).map(\.id) == ["s:busy", "s:swapped"])
+        #expect(SessionList.value(busy, .memory) == 800)
+        let panes = SessionList.sorted(swapped.panes + busy.panes, by: .memory)
+        #expect(panes.map(\.id) == ["p:2", "p:1"])
+    }
+
     @Test func invalidCpuSortsAsZero() {
         let odd = [
             session("s:nan", "a", cpu: .nan, memory: 0, tabs: []),
@@ -90,14 +101,28 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
 
         let panes = Fixtures.sessions.sessions.flatMap(\.panes)
         let claude = panes.filter { $0.kind == .claude }
-        #expect(summary.claudeMemoryBytes == claude.reduce(0) { $0 + $1.memoryBytes })
-        #expect(summary.memoryBytes == Fixtures.sessions.sessions.reduce(0) { $0 + $1.memoryBytes })
+        #expect(summary.claudeMemory.resident == claude.reduce(0) { $0 + $1.residentBytes })
+        #expect(summary.claudeMemory.footprint == claude.reduce(0) { $0 + $1.memoryBytes })
+        #expect(summary.memory.resident == Fixtures.sessions.sessions.reduce(0) { $0 + $1.residentBytes })
+        #expect(summary.memory.footprint == Fixtures.sessions.sessions.reduce(0) { $0 + $1.memoryBytes })
         #expect(abs(summary.cpuPercent - Fixtures.sessions.sessions.reduce(0) { $0 + $1.cpuPercent }) < 1e-9)
 
         #expect(summary.shares.map(\.label) == ["computa", "website", "dotfiles", "scratch"])
         #expect(abs(summary.shares.reduce(0) { $0 + $1.fraction } - 1) < 1e-9)
         let computa = try #require(Fixtures.sessions.sessions.first { $0.label == "computa" })
-        #expect(abs(summary.shares[0].fraction - Double(computa.memoryBytes) / Double(summary.memoryBytes)) < 1e-12)
+        #expect(abs(summary.shares[0].fraction - Double(computa.residentBytes) / Double(summary.memory.shownBytes)) < 1e-12)
+    }
+
+    @Test func oneSessionWithUnknownResidentMakesTheTotalAndSharesFootprint() throws {
+        // "b" is from an older daemon: no resident size, no processes to add up.
+        let summary = SessionsSummary([
+            session("s:a", "a", cpu: 0, memory: 300, tabs: [[pane("p", "zsh", cpu: 0, memory: 300, resident: 100)]]),
+            session("s:b", "b", cpu: 0, memory: 100, tabs: [[pane("q", "zsh", cpu: 0, memory: 100, resident: 0)]]),
+        ])
+        #expect(summary.memory == SessionMemory(resident: nil, footprint: 400))
+        #expect(summary.memory.isFootprintOnly)
+        #expect(summary.shares.map(\.label) == ["a", "b"])
+        #expect(abs(summary.shares[0].fraction - 0.75) < 1e-12)
     }
 
     @Test func allZeroMemoryGivesNoSharesInsteadOfDividingByZero() {
@@ -107,7 +132,7 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
         ])
         #expect(summary.sessionCount == 2)
         #expect(summary.paneCount == 1)
-        #expect(summary.memoryBytes == 0)
+        #expect(summary.memory == SessionMemory(resident: 0, footprint: 0))
         #expect(summary.shares.isEmpty)
     }
 
@@ -142,6 +167,23 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
             sessions: [session("s", "s", cpu: 0, memory: 0, tabs: [[pane("p", "claude", cpu: 0, memory: 300 << 20, kind: .claude)]])]
         )
         #expect(ClaudeUsage.popoverText(snapshot) == "1 pane · 300 MB")
+    }
+
+    @Test func showsResidentSizeNotFootprint() {
+        let snapshot = SessionsSnapshot(
+            time: Fixtures.now, rex: RexStatus(reachable: true, problem: "", version: ""),
+            sessions: [session("s", "s", cpu: 0, memory: 0, tabs: [[
+                pane("p", "claude", cpu: 0, memory: 900 << 20, resident: 300 << 20, kind: .claude),
+            ]])]
+        )
+        #expect(ClaudeUsage.popoverText(snapshot) == "1 pane · 300 MB")
+    }
+
+    @Test func anOlderDaemonsFootprintIsLabelledAsSuch() throws {
+        let text = try #require(ClaudeUsage.popoverText(Fixtures.sessionsOldDaemon))
+        #expect(text.hasPrefix("4 panes · "))
+        #expect(text.hasSuffix(" footprint"))
+        #expect(!text.contains("0 B"))
     }
 
     @Test func hiddenWithoutClaudeWhenRexIsDownOrWithoutASnapshot() {
