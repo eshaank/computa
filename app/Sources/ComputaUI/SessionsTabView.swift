@@ -20,6 +20,9 @@ struct SessionsTabView: View {
     /// Only set while the sessions stream is connected.
     let snapshot: SessionsSnapshot?
     @Binding var view: SessionsViewState
+    let actions: SessionActions
+    /// A pane waiting for the user to confirm closing it.
+    @State private var pendingClose: PaneCloseRequest?
 
     var body: some View {
         if let snapshot {
@@ -52,28 +55,56 @@ struct SessionsTabView: View {
     @ViewBuilder
     private func reachable(_ snapshot: SessionsSnapshot) -> some View {
         SessionsSummaryPanel(summary: SessionsSummary(snapshot.sessions), version: snapshot.rex.version)
-        HStack {
-            Text("Sort by")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
-            Spacer(minLength: 8)
-            SegmentedPicker(
-                items: [ProcessMetric.memory, .cpu], selection: $view.metric, title: \.title,
-                tint: { _ in Theme.sessions }, segmentWidth: 62, height: 22, font: .system(size: 11, weight: .semibold)
-            )
-        }
-        .padding(.leading, 4)
+        sortRow
         if snapshot.sessions.isEmpty {
             MessagePanel(
                 symbol: "rectangle.stack", tint: Theme.dimText, title: "No Rex sessions",
                 lines: ["Sessions you open in Rex show here, with what their panes use."]
             )
         } else {
-            SessionListView(
-                sessions: SessionList.sorted(snapshot.sessions, by: view.metric),
-                metric: view.metric, expanded: $view.expanded
+            list(snapshot.sessions)
+        }
+    }
+
+    /// "Sort by" and the picker. The last action's outcome takes the label's place; the row is
+    /// tall enough for two lines, so most messages never move the list, and a three-line one
+    /// moves it a little.
+    private var sortRow: some View {
+        HStack {
+            if let outcome = actions.outcome {
+                ActionOutcomeLine(outcome: outcome)
+            } else {
+                Text("Sort by")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.dimText)
+            }
+            Spacer(minLength: 8)
+            SegmentedPicker(
+                items: [ProcessMetric.memory, .cpu], selection: $view.metric, title: \.title,
+                tint: { _ in Theme.sessions }, segmentWidth: 62, height: 22, font: .system(size: 11, weight: .semibold)
             )
-            .clipShape(RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous))
+        }
+        .frame(minHeight: 30)
+        .padding(.leading, 4)
+    }
+
+    /// The list, and the confirmation sheet a pane's close control asks for.
+    private func list(_ sessions: [RexSession]) -> some View {
+        SessionListView(
+            sessions: SessionList.sorted(sessions, by: view.metric),
+            metric: view.metric, expanded: $view.expanded, actions: actions,
+            requestClose: { pendingClose = $0 }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous))
+        .sheet(item: $pendingClose) { request in
+            ClosePaneConfirmation(
+                request: request,
+                onCancel: { pendingClose = nil },
+                onConfirm: {
+                    pendingClose = nil
+                    actions.perform(request.action)
+                }
+            )
         }
     }
 }

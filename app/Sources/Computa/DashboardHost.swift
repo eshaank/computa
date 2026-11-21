@@ -21,7 +21,8 @@ struct DashboardHost: View {
             query: $query,
             expanded: $expanded,
             sessionsView: $sessionsView,
-            icons: icons
+            icons: icons,
+            sessionActions: model.sessionActions
         )
         .background(WindowVisibilityReader { model.setDashboardOpen($0) })
         .onDisappear { model.setDashboardOpen(false) }

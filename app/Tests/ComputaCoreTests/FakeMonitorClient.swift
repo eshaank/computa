@@ -179,6 +179,12 @@ final class ManualSleep: Sendable {
         }
     }
 
+    /// Ends the oldest wait in progress.
+    func releaseFirst() {
+        let first = state.withLock { $0.waiting.isEmpty ? nil : $0.waiting.removeFirst() }
+        first?.resume()
+    }
+
     /// Ends every wait in progress.
     func releaseAll() {
         let waiting = state.withLock { state in

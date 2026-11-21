@@ -48,11 +48,12 @@ public struct DashboardView: View {
     @Binding var expanded: Set<String>
     @Binding var sessionsView: SessionsViewState
     let icons: any AppIconProviding
+    let sessionActions: SessionActions
 
     public init(
         content: DashboardContent, tab: Binding<DashboardTab>, range: Binding<HistoryRange>,
         query: Binding<String>, expanded: Binding<Set<String>>, sessionsView: Binding<SessionsViewState>,
-        icons: any AppIconProviding
+        icons: any AppIconProviding, sessionActions: SessionActions = .none
     ) {
         self.content = content
         _tab = tab
@@ -61,6 +62,7 @@ public struct DashboardView: View {
         _expanded = expanded
         _sessionsView = sessionsView
         self.icons = icons
+        self.sessionActions = sessionActions
     }
 
     public var body: some View {
@@ -100,7 +102,9 @@ public struct DashboardView: View {
             }
             tabBody
         } else {
-            SessionsTabView(state: content.sessionsState, snapshot: content.sessions, view: $sessionsView)
+            SessionsTabView(
+                state: content.sessionsState, snapshot: content.sessions, view: $sessionsView, actions: sessionActions
+            )
         }
     }
 

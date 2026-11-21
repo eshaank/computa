@@ -18,12 +18,12 @@ func renderSessionTabs(icons: any AppIconProviding) throws {
     let open: Set<String> = ["session:01a1", "block:01a1-a"]
     func shot(
         _ name: String, content: DashboardContent = dashboardContent(), metric: ProcessMetric = .memory,
-        expanded: Set<String> = open, height: CGFloat = 760
+        expanded: Set<String> = open, height: CGFloat = 760, actions: SessionActions = .none
     ) throws {
         let view = DashboardView(
             content: content, tab: .constant(.sessions), range: .constant(.fifteenMinutes), query: .constant(""),
             expanded: .constant([]), sessionsView: .constant(SessionsViewState(metric: metric, expanded: expanded)),
-            icons: icons
+            icons: icons, sessionActions: actions
         )
         try renderWindow(view, size: CGSize(width: 460, height: height), named: name)
     }
@@ -37,5 +37,35 @@ func renderSessionTabs(icons: any AppIconProviding) throws {
     try shot(
         "dashboard-sessions-daemon-not-running",
         content: dashboardContent(sessionsState: .daemonNotRunning(unreachable))
+    )
+    try renderActionStates(shot: { name, actions, height in try shot(name, height: height, actions: actions) })
+}
+
+/// The action controls: a pane closing and a viewer opening, each outcome line, and the
+/// confirmation sheet's content.
+@MainActor
+func renderActionStates(shot: (String, SessionActions, CGFloat) throws -> Void) throws {
+    func actions(busy: Set<RexActionTarget> = [], _ outcome: RexActionOutcome?) -> SessionActions {
+        SessionActions(busy: busy, outcome: outcome, perform: { _ in })
+    }
+    let notFound = RexLookup.notFound.error ?? .rexNotFound("")
+    try shot("dashboard-sessions-busy", actions(busy: [.pane("block:01a1-b"), .session("session:5c21")], nil), 900)
+    try shot(
+        "dashboard-sessions-outcome-success",
+        actions(RexActionOutcome(succeeded: true, text: RexActionResult.openedProcessViewer(program: "/opt/homebrew/bin/btop", windowID: "").summary)),
+        640
+    )
+    try shot(
+        "dashboard-sessions-outcome-not-installed",
+        actions(RexActionOutcome(succeeded: false, text: RexActionError.actionsNotInstalled.description)), 640
+    )
+    try shot("dashboard-sessions-outcome-rex-not-found", actions(RexActionOutcome(succeeded: false, text: notFound.description)), 640)
+    let pane = Fixtures.sessions.sessions[1].tabs[0].panes[0]
+    try renderHosted(
+        ClosePaneConfirmation(
+            request: PaneCloseRequest(pane: pane, sessionID: "session:01a1", sessionLabel: "computa"),
+            onCancel: {}, onConfirm: {}
+        ),
+        named: "close-pane-confirmation"
     )
 }
