@@ -131,16 +131,17 @@ public struct SessionsSummary: Sendable, Equatable {
 /// Text for the popover's "Claude Code" row.
 public enum ClaudeUsage {
     /// For example "3 panes · 4.2 GB": the panes' resident size, what is in RAM now. When an older
-    /// daemon leaves that unknown, "3 panes · 5.1 GB footprint". Nil when the row should be
-    /// hidden: no snapshot (the stream is not connected), Rex unreachable, or no Claude Code pane.
+    /// daemon leaves that unknown, "5.1 GB footprint": the label matters more than the pane count,
+    /// and both do not fit the popover's row. Nil when the row should be hidden: no snapshot (the
+    /// stream is not connected), Rex unreachable, or no Claude Code pane.
     public static func popoverText(_ snapshot: SessionsSnapshot?) -> String? {
         guard let snapshot, snapshot.rex.reachable else { return nil }
         let summary = SessionsSummary(snapshot.sessions)
         guard summary.claudePaneCount > 0 else { return nil }
-        let panes = summary.claudePaneCount == 1 ? "1 pane" : "\(summary.claudePaneCount) panes"
         let memory = summary.claudeMemory
-        let suffix = memory.isFootprintOnly ? " footprint" : ""
-        return "\(panes) · \(Format.memory(memory.shownBytes))\(suffix)"
+        if memory.isFootprintOnly { return "\(Format.memory(memory.footprint)) footprint" }
+        let panes = summary.claudePaneCount == 1 ? "1 pane" : "\(summary.claudePaneCount) panes"
+        return "\(panes) · \(Format.memory(memory.shownBytes))"
     }
 }
 

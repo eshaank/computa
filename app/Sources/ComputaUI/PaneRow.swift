@@ -13,22 +13,37 @@ struct PaneRow: View {
     let close: () -> Void
     @State private var hovering = false
 
+    /// Room for the close button, which floats over the row so the whole row stays one target.
+    private static let closeSlot: CGFloat = 40
+    private static let chevronWidth: CGFloat = 10
+
+    /// The whole row, padding and chevron included, opens the pane; only the close button does
+    /// something else.
     var body: some View {
-        HStack(spacing: 10) {
-            Button(action: open) { content }
-                .buttonStyle(.plain)
-                .help("Show the processes in this pane")
+        Button(action: open) {
+            HStack(spacing: 10) {
+                content
+                if showsClose { Color.clear.frame(width: Self.closeSlot, height: 1) }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.dimText)
+                    .frame(width: Self.chevronWidth)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(hovering ? 0.04 : 0))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Show the processes in this pane")
+        .overlay(alignment: .trailing) {
             if showsClose {
                 ClosePaneButton(isBusy: isBusy, action: close)
+                    .frame(width: Self.closeSlot)
+                    .padding(.trailing, 12 + Self.chevronWidth + 10)
             }
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.dimText)
-                .accessibilityHidden(true)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(hovering ? 0.04 : 0))
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Show Processes", action: open)
@@ -67,7 +82,7 @@ struct PaneRow: View {
 
     /// The sorted-by figure first and brighter, the other under it.
     private var values: some View {
-        let memory = "\(MemoryWords.label(pane.memory)) \(SessionFigures.memory(pane.memory))"
+        let memory = "\(SessionMemoryWords.label(pane.memory)) \(SessionFigures.memory(pane.memory))"
         let cpu = "CPU \(SessionFigures.cpu(pane.cpuPercent))"
         let (first, second) = metric == .memory ? (memory, cpu) : (cpu, memory)
         return VStack(alignment: .trailing, spacing: 2) {
@@ -80,6 +95,6 @@ struct PaneRow: View {
         }
         .lineLimit(1)
         .fixedSize()
-        .help(MemoryWords.help)
+        .help(SessionMemoryWords.help)
     }
 }

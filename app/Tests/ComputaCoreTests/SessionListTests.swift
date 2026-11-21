@@ -181,8 +181,8 @@ private func session(_ id: String, _ label: String, cpu: Double, memory: UInt64,
 
     @Test func anOlderDaemonsFootprintIsLabelledAsSuch() throws {
         let text = try #require(ClaudeUsage.popoverText(Fixtures.sessionsOldDaemon))
-        #expect(text.hasPrefix("4 panes · "))
-        #expect(text.hasSuffix(" footprint"))
+        let footprint = Fixtures.sessionsOldDaemon.sessions.flatMap(\.panes).filter(\.isClaude).reduce(0) { $0 + $1.memoryBytes }
+        #expect(text == "\(Format.memory(footprint)) footprint")
         #expect(!text.contains("0 B"))
     }
 

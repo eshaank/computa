@@ -107,11 +107,11 @@ struct SessionCard: View {
     private var figures: some View {
         let memory = session.memory
         return HStack(alignment: .top, spacing: 12) {
-            Figure(
-                label: MemoryWords.label(memory), value: SessionFigures.memory(memory), emphasized: metric == .memory,
-                help: "\(MemoryWords.help) Footprint here: \(Format.memory(memory.footprint))."
+            SessionFigure(
+                label: SessionMemoryWords.label(memory), value: SessionFigures.memory(memory), emphasized: metric == .memory,
+                help: "\(SessionMemoryWords.help) Footprint here: \(Format.memory(memory.footprint))."
             )
-            Figure(label: "CPU", value: SessionFigures.cpu(session.cpuPercent), emphasized: metric == .cpu)
+            SessionFigure(label: "CPU", value: SessionFigures.cpu(session.cpuPercent), emphasized: metric == .cpu)
             Spacer(minLength: 0)
         }
     }

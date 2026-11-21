@@ -116,7 +116,7 @@ struct SessionsTabView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 // Solid under the glass, so the text stays readable over the cards.
                 .background(
-                    Theme.background.opacity(0.9),
+                    Theme.background,
                     in: RoundedRectangle(cornerRadius: SessionMetrics.cardRadius, style: .continuous)
                 )
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: SessionMetrics.cardRadius, style: .continuous))

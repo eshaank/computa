@@ -37,7 +37,7 @@ public struct SessionActions: Sendable {
     func isBusy(_ pane: RexPane) -> Bool { busy.contains(.pane(pane.id)) }
 }
 
-/// Opens a session's process viewer. On a card it is a round glass button with the glyph; in a
+/// Opens a session's process viewer. On a card it is a round button with the glyph; in a
 /// session's header it has its title too. While the action runs, a spinner takes its place.
 struct ProcessViewerButton: View {
     var titled = false
@@ -53,14 +53,11 @@ struct ProcessViewerButton: View {
                     Label("Process Viewer", systemImage: "waveform.path.ecg")
                         .foregroundStyle(Theme.text)
                 } else {
-                    Image(systemName: "waveform.path.ecg")
-                        .frame(width: 16, height: 16)
-                        .foregroundStyle(Theme.text)
+                    RoundGlyph(symbol: "waveform.path.ecg")
                 }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .buttonBorderShape(titled ? .capsule : .circle)
-            .controlSize(titled ? .regular : .small)
             .help("Open a process viewer in this session")
             .accessibilityLabel("Open process viewer")
         }
@@ -71,7 +68,7 @@ struct ProcessViewerButton: View {
             ProgressView().controlSize(.small)
             if titled { Text("Opening…").font(.callout).foregroundStyle(Theme.dimText) }
         }
-        .frame(minWidth: 24, minHeight: 24)
+        .frame(minWidth: RoundGlyph.size, minHeight: RoundGlyph.size)
         .accessibilityLabel("Opening process viewer")
     }
 }
@@ -88,7 +85,7 @@ struct ClosePaneButton: View {
                 ProgressView().controlSize(.small)
                 if titled { Text("Closing…").font(.callout).foregroundStyle(Theme.dimText) }
             }
-            .frame(minWidth: 24, minHeight: 24)
+            .frame(minWidth: RoundGlyph.size, minHeight: RoundGlyph.size)
             .accessibilityLabel("Closing pane")
         } else if titled {
             Button(role: .destructive, action: action) {
@@ -100,16 +97,28 @@ struct ClosePaneButton: View {
             .help("Close this pane and end its programs")
         } else {
             Button(action: action) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
-                    .frame(width: 16, height: 16)
+                RoundGlyph(symbol: "xmark")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .buttonBorderShape(.circle)
-            .controlSize(.small)
             .help("Close pane…")
             .accessibilityLabel("Close pane")
         }
+    }
+}
+
+/// The glyph inside a round action button, at a size that is easy to hit whatever the button
+/// style draws around it.
+struct RoundGlyph: View {
+    static let size: CGFloat = 28
+    let symbol: String
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(Theme.text)
+            .frame(width: Self.size - 12, height: Self.size - 12)
+            .contentShape(Circle())
     }
 }
 

@@ -11,7 +11,7 @@ enum SessionMetrics {
 }
 
 /// What "Mem" and "Footprint" mean, on every figure that shows either.
-enum MemoryWords {
+enum SessionMemoryWords {
     static let help = "Mem is what is in RAM now. Footprint also counts memory macOS has compressed "
         + "or moved to swap, so it can exceed the RAM installed."
 
@@ -40,7 +40,7 @@ extension View {
 }
 
 /// A coloured, rounded icon tile, as in System Settings' sidebar.
-struct IconTile: View {
+struct SessionIconTile: View {
     let symbol: String
     let tint: Color
     var size: CGFloat = 28
@@ -65,7 +65,7 @@ struct PaneTile: View {
     var size: CGFloat = 28
 
     var body: some View {
-        IconTile(symbol: symbol, tint: tint, size: size)
+        SessionIconTile(symbol: symbol, tint: tint, size: size)
             .glow(Theme.sessions, isOn: kind == .claude)
     }
 
@@ -80,7 +80,7 @@ struct PaneTile: View {
     private var tint: Color {
         switch kind {
         case .claude: Theme.sessions
-        case .shell: Color(hex: 0x2F8F5B)
+        case .shell: Theme.cpu.opacity(0.55)
         case .program, .unspecified: Theme.track
         }
     }
@@ -92,7 +92,7 @@ struct SessionTile: View {
     var size: CGFloat = 28
 
     var body: some View {
-        IconTile(
+        SessionIconTile(
             symbol: "rectangle.split.2x2", tint: session.claudePaneCount > 0 ? Theme.sessions : Theme.track, size: size
         )
     }
@@ -130,7 +130,7 @@ struct ClaudeCount: View {
 }
 
 /// A small caption over a figure: "Mem" / "1.2 GB".
-struct Figure: View {
+struct SessionFigure: View {
     let label: String
     let value: String
     var emphasized = true

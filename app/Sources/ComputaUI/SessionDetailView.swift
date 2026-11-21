@@ -92,13 +92,13 @@ struct SessionHeader: View {
     private var figures: some View {
         let memory = session.memory
         return HStack(alignment: .top, spacing: 12) {
-            Figure(label: MemoryWords.label(memory), value: SessionFigures.memory(memory), help: MemoryWords.help)
+            SessionFigure(label: SessionMemoryWords.label(memory), value: SessionFigures.memory(memory), help: SessionMemoryWords.help)
             if !memory.isFootprintOnly {
-                Figure(label: "Footprint", value: Format.memory(memory.footprint), emphasized: false, help: MemoryWords.help)
+                SessionFigure(label: "Footprint", value: Format.memory(memory.footprint), emphasized: false, help: SessionMemoryWords.help)
             }
-            Figure(label: "CPU", value: SessionFigures.cpu(session.cpuPercent))
+            SessionFigure(label: "CPU", value: SessionFigures.cpu(session.cpuPercent))
             if session.claudePaneCount > 0 {
-                Figure(label: "Claude Code", value: plural(session.claudePaneCount, "pane"), tint: Theme.sessions)
+                SessionFigure(label: "Claude Code", value: plural(session.claudePaneCount, "pane"), tint: Theme.sessions)
             }
             Spacer(minLength: 0)
         }
@@ -117,11 +117,11 @@ struct TabHeading: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 8)
-            Text("\(MemoryWords.label(tab.memory)) \(SessionFigures.memory(tab.memory)) · CPU \(SessionFigures.cpu(tab.cpuPercent))")
+            Text("\(SessionMemoryWords.label(tab.memory)) \(SessionFigures.memory(tab.memory)) · CPU \(SessionFigures.cpu(tab.cpuPercent))")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(Theme.dimText)
                 .lineLimit(1)
-                .help(MemoryWords.help)
+                .help(SessionMemoryWords.help)
         }
         .padding(.horizontal, 4)
     }

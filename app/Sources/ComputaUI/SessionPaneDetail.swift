@@ -83,10 +83,10 @@ struct PaneFacts: View {
                 row("Tab", tab.label.isEmpty ? "Tab" : tab.label)
             }
             Divider()
-            row(MemoryWords.label(memory), SessionFigures.memory(memory)).help(MemoryWords.help)
+            row(SessionMemoryWords.label(memory), SessionFigures.memory(memory)).help(SessionMemoryWords.help)
             if !memory.isFootprintOnly {
                 Divider()
-                row("Footprint", Format.memory(memory.footprint)).help(MemoryWords.help)
+                row("Footprint", Format.memory(memory.footprint)).help(SessionMemoryWords.help)
             }
             Divider()
             row("CPU", SessionFigures.cpu(pane.cpuPercent))
@@ -149,8 +149,8 @@ struct ProcessTable: View {
     private var heading: some View {
         HStack(spacing: 8) {
             Text("Name").frame(maxWidth: .infinity, alignment: .leading)
-            headingColumn("Mem").help(MemoryWords.help)
-            headingColumn("Footprint").help(MemoryWords.help)
+            headingColumn("Mem").help(SessionMemoryWords.help)
+            headingColumn("Footprint").help(SessionMemoryWords.help)
             headingColumn("CPU")
         }
         .font(.caption)

@@ -46,10 +46,10 @@ struct SessionsSummaryPanel: View {
     private var memoryFigure: some View {
         let memory = summary.memory
         return figure(
-            MemoryWords.label(memory), SessionFigures.memory(memory),
+            SessionMemoryWords.label(memory), SessionFigures.memory(memory),
             detail: memory.isFootprintOnly ? nil : "Footprint \(Format.memory(memory.footprint))"
         )
-        .help(MemoryWords.help)
+        .help(SessionMemoryWords.help)
     }
 
     private var claudeFigure: some View {
@@ -63,14 +63,14 @@ struct SessionsSummaryPanel: View {
                 .font(.title3.weight(.medium).monospacedDigit())
                 .foregroundStyle(count > 0 ? Theme.sessions : Theme.dimText)
             if count > 0 {
-                Text("\(MemoryWords.label(memory)) \(SessionFigures.memory(memory))")
+                Text("\(SessionMemoryWords.label(memory)) \(SessionFigures.memory(memory))")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(Theme.sessions.opacity(0.8))
             }
         }
         .lineLimit(1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help(MemoryWords.help)
+        .help(SessionMemoryWords.help)
     }
 
     private func figure(_ label: String, _ value: String, detail: String?) -> some View {
