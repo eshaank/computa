@@ -56,7 +56,7 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key>
     <string>$version</string>
     <key>LSMinimumSystemVersion</key>
-    <string>15.0</string>
+    <string>26.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>

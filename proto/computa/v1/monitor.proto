@@ -139,6 +139,9 @@ message Memory {
   uint64 swap_used_bytes = 8;
   uint64 swap_total_bytes = 9;
   MemoryPressure pressure = 10;
+  // How much data the compressor holds, at its size before compression.
+  // compressed_bytes is the RAM that data now takes up, so this is larger.
+  uint64 compressor_stored_bytes = 11;
 }
 
 message Volume {
@@ -241,6 +244,9 @@ message WatchProcessesRequest {
   // Milliseconds between snapshots. Zero means 2000. The daemon rounds it to
   // whole seconds and keeps it between 1000 and 60000.
   uint32 interval_ms = 1;
+  // Also measure each process's network traffic. It costs the daemon extra
+  // work, so a client asks only while it shows those numbers.
+  bool include_network = 2;
 }
 
 message ProcessSnapshot {
@@ -251,6 +257,18 @@ message ProcessSnapshot {
   HiddenProcesses hidden = 3;
   // Every process on the machine, readable or not.
   uint32 process_count = 4;
+  // Set when the request asked for network traffic.
+  ProcessNetworkStatus network = 5;
+}
+
+// Whether the per-process network rates in a snapshot can be trusted.
+message ProcessNetworkStatus {
+  // False when the daemon could not measure, and in the first snapshot of a
+  // stream, before there are two readings to compare. Every rate is then 0.
+  bool available = 1;
+  // When not available for a reason a person can act on, that reason in
+  // words. Empty otherwise.
+  string problem = 2;
 }
 
 // Processes that belong together, such as an app and its helpers.
@@ -266,9 +284,16 @@ message ProcessGroup {
   string bundle_path = 3;
   // Added up over the group's processes.
   double cpu_percent = 4;
+  // Footprint. See Process.memory_bytes.
   uint64 memory_bytes = 5;
   // The group's processes, in no particular order.
   repeated Process processes = 6;
+  // In RAM now. See Process.resident_bytes.
+  uint64 resident_bytes = 7;
+  // Network traffic, added up over the group's processes. Zero unless the
+  // request set include_network.
+  double rx_bytes_per_sec = 8;
+  double tx_bytes_per_sec = 9;
 }
 
 message Process {
@@ -280,11 +305,19 @@ message Process {
   string path = 4;
   // 100 means one core fully busy, so a process using four cores reports 400.
   double cpu_percent = 5;
-  // Physical footprint, the "Memory" column in Activity Monitor.
+  // Physical footprint, the "Memory" column in Activity Monitor: everything
+  // the process has allocated, counting what macOS has compressed or moved to
+  // swap at its full size. Added up over processes it can be far more than
+  // the RAM installed.
   uint64 memory_bytes = 6;
-  // Resident size (RSS). It counts shared pages and leaves out compressed
-  // memory, so it does not add up across processes.
+  // Resident size (RSS): what is in RAM right now. It leaves out compressed
+  // and swapped memory, and counts a page shared between processes once in
+  // each of them, so sums run a little high.
   uint64 resident_bytes = 7;
+  // Network traffic over every interface, loopback included. Zero unless the
+  // request set include_network.
+  double rx_bytes_per_sec = 8;
+  double tx_bytes_per_sec = 9;
 }
 
 // A daemon that does not run as root cannot read the usage of processes
@@ -324,7 +357,8 @@ message RexStatus {
 }
 
 // Usage figures are added up over the processes the daemon can read.
-// 100 percent of CPU means one core fully busy.
+// 100 percent of CPU means one core fully busy. memory_bytes is footprint and
+// resident_bytes is what is in RAM; see Process for what each one counts.
 
 message Session {
   // Rex's id, for example "session:01a1f5ee-...".
@@ -335,6 +369,8 @@ message Session {
   uint32 process_count = 5;
   // The session's tabs, in Rex's order.
   repeated SessionWindow windows = 6;
+  // In RAM now, added up like memory_bytes. See Process.resident_bytes.
+  uint64 resident_bytes = 7;
 }
 
 // A tab. Rex calls it a window.
@@ -345,6 +381,7 @@ message SessionWindow {
   uint64 memory_bytes = 4;
   uint32 process_count = 5;
   repeated Pane panes = 6;
+  uint64 resident_bytes = 7;
 }
 
 enum PaneKind {
@@ -374,6 +411,7 @@ message Pane {
   string working_directory = 8;
   // The readable processes started in the pane, in no particular order.
   repeated Process processes = 9;
+  uint64 resident_bytes = 10;
 }
 
 // ---------------------------------------------------------------- app icons
