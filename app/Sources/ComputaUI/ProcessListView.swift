@@ -17,6 +17,9 @@ struct ProcessListView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
+                if metric == .memory, !groups.isEmpty {
+                    MemoryColumnsHeader()
+                }
                 if groups.isEmpty {
                     Text(emptyText)
                         .font(.system(size: 12))
@@ -29,7 +32,11 @@ struct ProcessListView: View {
                     }
                     if expanded.contains(group.id), group.processes.count > 1 {
                         ForEach(group.processes) { process in
-                            ProcessRow(process: process, metric: metric)
+                            ProcessRow(
+                                process: process,
+                                value: ProcessList.valueText(ProcessList.value(process, metric), metric),
+                                total: ProcessList.totalText(footprint: process.memoryBytes, metric)
+                            )
                         }
                     }
                 }
@@ -79,6 +86,9 @@ struct GroupRow: View {
                 .font(.system(size: 13, weight: .medium).monospacedDigit())
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
+            if let total = ProcessList.totalText(footprint: group.memoryBytes, metric) {
+                TotalFigure(text: total, size: 12)
+            }
         }
         .padding(.horizontal, 14)
         .frame(height: DashboardMetrics.rowHeight)
@@ -92,7 +102,9 @@ struct GroupRow: View {
 /// One process inside an expanded group: name, pid and value, indented under the app's name.
 struct ProcessRow: View {
     let process: ProcessEntry
-    let metric: ProcessMetric
+    let value: String
+    /// The footprint, in the memory list's second column. Nil where there is one figure.
+    var total: String?
     /// Where the name starts: under the app's name by default.
     var indent: CGFloat = 14 + 10 + 10 + DashboardMetrics.iconSize + 10
     /// Where the value ends.
@@ -109,13 +121,53 @@ struct ProcessRow: View {
                 .font(.system(size: 10.5).monospacedDigit())
                 .foregroundStyle(Theme.dimText)
             Spacer(minLength: 8)
-            Text(ProcessList.valueText(ProcessList.value(process, metric), metric))
+            Text(value)
                 .font(.system(size: 12).monospacedDigit())
                 .foregroundStyle(Theme.text.opacity(0.78))
+            if let total {
+                TotalFigure(text: total, size: 11)
+            }
         }
         .padding(.leading, indent)
         .padding(.trailing, trailing)
         .frame(height: 24)
+    }
+}
+
+/// The memory list's second column: the footprint, dimmer than the in-RAM figure beside it.
+struct TotalFigure: View {
+    static let width: CGFloat = 76
+
+    let text: String
+    let size: CGFloat
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: size).monospacedDigit())
+            .foregroundStyle(Theme.dimText)
+            .lineLimit(1)
+            .frame(width: Self.width, alignment: .trailing)
+    }
+}
+
+/// Names the memory list's two columns and says why the second can exceed the RAM installed.
+struct MemoryColumnsHeader: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("Total counts memory macOS has compressed or moved to swap, so it can exceed the RAM installed.")
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Text("In RAM")
+                .foregroundStyle(Theme.text.opacity(0.78))
+            Text("Total")
+                .frame(width: TotalFigure.width, alignment: .trailing)
+        }
+        .font(.system(size: 10.5, weight: .medium))
+        .foregroundStyle(Theme.dimText)
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
     }
 }
 

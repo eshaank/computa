@@ -53,8 +53,8 @@ struct SessionListView: View {
                 if expanded.contains(pane.id) {
                     ForEach(pane.processes) { process in
                         ProcessRow(
-                            process: process, metric: metric, indent: SessionRowMetrics.processIndent,
-                            trailing: SessionRowMetrics.valueTrailing
+                            process: process, value: ProcessList.footprintValueText(process, metric),
+                            indent: SessionRowMetrics.processIndent, trailing: SessionRowMetrics.valueTrailing
                         )
                     }
                 }

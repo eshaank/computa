@@ -1,6 +1,7 @@
 import Foundation
 
-/// What the process list is sorted by.
+/// What the process list is sorted by. `memory` means memory in RAM now, not footprint: on a
+/// machine that is swapping, footprints add up to more than the RAM installed.
 public enum ProcessMetric: Sendable, Hashable, Identifiable {
     case cpu, memory
 
@@ -63,14 +64,14 @@ public enum ProcessList {
     public static func value(_ group: ProcessGroup, _ metric: ProcessMetric) -> Double {
         switch metric {
         case .cpu: finite(group.cpuPercent)
-        case .memory: Double(group.memoryBytes)
+        case .memory: Double(group.residentBytes)
         }
     }
 
     public static func value(_ process: ProcessEntry, _ metric: ProcessMetric) -> Double {
         switch metric {
         case .cpu: finite(process.cpuPercent)
-        case .memory: Double(process.memoryBytes)
+        case .memory: Double(process.residentBytes)
         }
     }
 
@@ -79,6 +80,20 @@ public enum ProcessList {
         switch metric {
         case .cpu: Format.cpuShare(value)
         case .memory: Format.memory(UInt64(max(0, value)))
+        }
+    }
+
+    /// The second figure in a memory row: the footprint. Nil for CPU, which has one figure.
+    public static func totalText(footprint: UInt64, _ metric: ProcessMetric) -> String? {
+        metric == .memory ? Format.memory(footprint) : nil
+    }
+
+    /// A process's value where footprints are shown: a Rex session's list, whose pane totals
+    /// are footprints.
+    public static func footprintValueText(_ process: ProcessEntry, _ metric: ProcessMetric) -> String {
+        switch metric {
+        case .cpu: valueText(value(process, .cpu), .cpu)
+        case .memory: Format.memory(process.memoryBytes)
         }
     }
 

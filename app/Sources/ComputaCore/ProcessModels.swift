@@ -27,8 +27,12 @@ public struct ProcessGroup: Sendable, Equatable, Identifiable {
     public var bundlePath: String
     /// Added up over the group's processes; 100 is one core.
     public var cpuPercent: Double
+    /// Footprint added up over the group's processes. See `ProcessEntry.memoryBytes`.
     public var memoryBytes: UInt64
     public var processes: [ProcessEntry]
+
+    /// Memory in RAM now, added up over the group's processes. See `ProcessEntry.residentBytes`.
+    public var residentBytes: UInt64 { processes.reduce(0) { $0 + $1.residentBytes } }
 
     /// The id the daemon gives the group of system processes.
     public static let systemID = "system"
@@ -62,8 +66,12 @@ public struct ProcessEntry: Sendable, Equatable, Identifiable {
     public var path: String
     /// 100 means one core fully busy.
     public var cpuPercent: Double
-    /// Physical footprint, as in Activity Monitor.
+    /// Physical footprint, the "Memory" column in Activity Monitor: everything the process has
+    /// allocated, counting what macOS has compressed or moved to swap at its full size. Added up
+    /// over processes it can be far more than the RAM installed.
     public var memoryBytes: UInt64
+    /// What is in RAM right now (resident size). It leaves out compressed and swapped memory,
+    /// and counts a page shared between processes once in each of them.
     public var residentBytes: UInt64
 
     public var id: Int32 { pid }

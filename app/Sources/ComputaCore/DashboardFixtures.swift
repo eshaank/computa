@@ -67,8 +67,8 @@ extension Fixtures {
                 return ProcessEntry(
                     pid: nextPid, parentPid: index == 0 ? 1 : nextPid - Int32(7 * index), name: processName,
                     path: bundle.isEmpty ? "/usr/bin/\(processName)" : "\(bundle)/Contents/MacOS/\(processName)",
-                    cpuPercent: cpu * share * decay, memoryBytes: UInt64(Double(memory) * share * decay),
-                    residentBytes: UInt64(Double(memory) * share)
+                    cpuPercent: cpu * share * decay, memoryBytes: UInt64(Double(memory) * share * 2.5),
+                    residentBytes: UInt64(Double(memory) * share * decay)
                 )
             }
             return ProcessGroup(

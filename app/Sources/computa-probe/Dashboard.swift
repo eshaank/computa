@@ -25,7 +25,7 @@ func probeDashboard(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> B
         }
         if let snapshot = first.withLock({ $0 }) {
             let top = ProcessList.sorted(snapshot.groups, by: .memory).prefix(5)
-                .map { "\($0.name) \($0.badge ?? "") \(Format.memory($0.memoryBytes))" }
+                .map { "\($0.name) \($0.badge ?? "") \(Format.memory($0.residentBytes)) in RAM, \(Format.memory($0.memoryBytes)) total" }
             print("processes: \(snapshot.groups.count) groups, \(snapshot.processCount) processes; top: \(top.joined(separator: ", "))")
         } else {
             allPassed = false
