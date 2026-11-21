@@ -257,14 +257,17 @@ message ProcessSnapshot {
   HiddenProcesses hidden = 3;
   // Every process on the machine, readable or not.
   uint32 process_count = 4;
-  // Set when the request asked for network traffic.
+  // Set when the request asked for network traffic. Such a snapshot also
+  // lists processes whose usage is hidden but that use the network, with
+  // zero CPU and memory; they are still counted in hidden.
   ProcessNetworkStatus network = 5;
 }
 
 // Whether the per-process network rates in a snapshot can be trusted.
 message ProcessNetworkStatus {
-  // False when the daemon could not measure, and in the first snapshot of a
-  // stream, before there are two readings to compare. Every rate is then 0.
+  // False when the daemon could not measure, and for the first snapshots
+  // after measuring starts (about two seconds), before there are two
+  // readings to compare. Every rate is then 0.
   bool available = 1;
   // When not available for a reason a person can act on, that reason in
   // words. Empty otherwise.
@@ -314,8 +317,15 @@ message Process {
   // and swapped memory, and counts a page shared between processes once in
   // each of them, so sums run a little high.
   uint64 resident_bytes = 7;
-  // Network traffic over every interface, loopback included. Zero unless the
-  // request set include_network.
+  // Network traffic, from macOS's nettop. Zero unless the request set
+  // include_network. It counts the data sent and received by the process's
+  // sockets that are attached to Wi-Fi, wired Ethernet or AWDL, the kinds of
+  // interface the Net chart adds up; loopback sockets are left out. Sockets
+  // on a VPN tunnel are expected to be left out too (not yet checked with a
+  // VPN running). It is data only, without IP and TCP headers or bare acknowledgements, so
+  // added up over processes it runs a little under Network.rx_bytes_per_sec
+  // (about 7% while downloading) and well under Network.tx_bytes_per_sec
+  // while only acknowledging. It also trails the chart by about a second.
   double rx_bytes_per_sec = 8;
   double tx_bytes_per_sec = 9;
 }

@@ -54,6 +54,8 @@ fn check_consistent(s: &ProcessSnapshot) {
         let mem: u64 = g.processes.iter().map(|p| p.memory_bytes).sum();
         let cpu: f64 = g.processes.iter().map(|p| p.cpu_percent).sum();
         assert_eq!(g.memory_bytes, mem, "group {} memory", g.id);
+        let resident: u64 = g.processes.iter().map(|p| p.resident_bytes).sum();
+        assert_eq!(g.resident_bytes, resident, "group {} resident", g.id);
         assert!((g.cpu_percent - cpu).abs() < 1e-6, "group {} cpu", g.id);
         assert_eq!(g.bundle_path.is_empty(), !g.id.starts_with('/'), "{}", g.id);
         for p in &g.processes {
@@ -76,7 +78,10 @@ async fn snapshots_are_consistent_and_include_this_process() {
     let (mut client, _stop) = start().await;
     let started = Instant::now();
     let mut stream = client
-        .watch_processes(WatchProcessesRequest { interval_ms: 2000 })
+        .watch_processes(WatchProcessesRequest {
+            interval_ms: 2000,
+            include_network: false,
+        })
         .await
         .expect("WatchProcesses")
         .into_inner();

@@ -7,8 +7,8 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 
-use crate::pb::ProcessSnapshot;
-use crate::processes::Subscription;
+use crate::pb::{ProcessNetworkStatus, ProcessSnapshot};
+use crate::processes::{Frame, Subscription};
 
 /// What zero means.
 const DEFAULT_INTERVAL_MS: u32 = 2000;
@@ -35,12 +35,28 @@ pub(super) fn due(last_sent: Option<Instant>, at: Instant, interval: Duration) -
     last_sent.is_none_or(|last| at.saturating_duration_since(last) + EARLY_MARGIN >= interval)
 }
 
+/// The message for one client. With `network`, the frame's networked
+/// snapshot, or (for a frame taken before measuring started) the plain one
+/// marked as not available yet.
+pub(super) fn message(frame: &Frame, network: bool) -> ProcessSnapshot {
+    match (&frame.networked, network) {
+        (Some(networked), true) => networked.clone(),
+        (None, true) => ProcessSnapshot {
+            network: Some(ProcessNetworkStatus::default()),
+            ..frame.snapshot.clone()
+        },
+        (_, false) => frame.snapshot.clone(),
+    }
+}
+
 /// Starts a task that sends the newest frame as soon as there is one, then
 /// one per `interval`, until the client goes away. The subscription is
-/// held by the task, so the sampler stops when the last client leaves.
+/// held by the task, so the sampler (and the network meter, if this client
+/// asked for traffic) stops when the last client leaves.
 pub fn stream(
     subscription: Subscription,
     interval: Duration,
+    network: bool,
 ) -> ReceiverStream<Result<ProcessSnapshot, Status>> {
     let (tx, rx) = mpsc::channel(2);
     tokio::spawn(async move {
@@ -50,7 +66,7 @@ pub fn stream(
             let frame = frames.borrow_and_update().clone();
             if let Some(frame) = frame.filter(|f| due(last_sent, f.at, interval)) {
                 last_sent = Some(frame.at);
-                if tx.send(Ok(frame.snapshot.clone())).await.is_err() {
+                if tx.send(Ok(message(&frame, network))).await.is_err() {
                     break;
                 }
             }
@@ -64,7 +80,15 @@ pub fn stream(
                 }
             }
         }
-        drop(subscription);
+        // The last network subscriber leaving waits for nettop to be killed
+        // and reaped, so that wait stays off the async workers.
+        if network {
+            if let Err(error) = tokio::task::spawn_blocking(move || drop(subscription)).await {
+                tracing::error!(%error, "could not release the process subscription");
+            }
+        } else {
+            drop(subscription);
+        }
         tracing::debug!("a WatchProcesses stream ended");
     });
     ReceiverStream::new(rx)
@@ -72,7 +96,49 @@ pub fn stream(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
+    use crate::pb::ProcessGroup;
+    use crate::processes::ProcessTable;
+
+    fn frame(networked: Option<ProcessSnapshot>) -> Frame {
+        Frame {
+            seq: 1,
+            at: Instant::now(),
+            table: Arc::new(ProcessTable::default()),
+            snapshot: ProcessSnapshot {
+                unix_ms: 1,
+                ..ProcessSnapshot::default()
+            },
+            networked,
+        }
+    }
+
+    #[test]
+    fn each_client_gets_the_snapshot_it_asked_for() {
+        let networked = ProcessSnapshot {
+            unix_ms: 1,
+            groups: vec![ProcessGroup {
+                rx_bytes_per_sec: 5.0,
+                ..ProcessGroup::default()
+            }],
+            network: Some(ProcessNetworkStatus {
+                available: true,
+                problem: String::new(),
+            }),
+            ..ProcessSnapshot::default()
+        };
+        let f = frame(Some(networked.clone()));
+        assert_eq!(message(&f, true), networked);
+        assert_eq!(message(&f, false), f.snapshot, "no rates, no status");
+
+        let before = frame(None);
+        let early = message(&before, true);
+        assert_eq!(early.network, Some(ProcessNetworkStatus::default()));
+        assert_eq!(early.unix_ms, 1);
+        assert_eq!(message(&before, false).network, None);
+    }
 
     #[test]
     fn zero_means_two_seconds() {

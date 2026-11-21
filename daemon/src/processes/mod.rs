@@ -9,7 +9,9 @@ mod darwin;
 pub mod group;
 mod kinfo;
 mod monitor;
+mod network;
 mod reader;
+mod sampling;
 mod table;
 
 pub use monitor::{FIRST_FRAME_DELAY, Frame, Pass, PassFactory, ProcessMonitor, Subscription};

@@ -20,6 +20,10 @@ pub struct PageCounts {
     /// `compressor_page_count`: pages the compressor itself occupies
     /// ("Pages occupied by compressor"), not the pages stored in it.
     pub compressor: u64,
+    /// `total_uncompressed_pages_in_compressor`: the pages stored in the
+    /// compressor, at their size before compression ("Pages stored in
+    /// compressor").
+    pub stored_in_compressor: u64,
     /// `external_page_count`: file-backed pages ("File-backed pages").
     pub external: u64,
     /// `free_count`, which includes speculative pages.
@@ -35,12 +39,15 @@ pub struct PageCounts {
 /// - used = app + wired + compressed (Activity Monitor's "Memory Used")
 /// - cached = external + purgeable (file cache plus discardable memory)
 /// - free = free_count
+/// - compressor_stored = total_uncompressed_pages_in_compressor, the data
+///   that `compressed` holds, at its size before compression
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Breakdown {
     pub used: u64,
     pub app: u64,
     pub wired: u64,
     pub compressed: u64,
+    pub compressor_stored: u64,
     pub cached: u64,
     pub free: u64,
 }
@@ -54,6 +61,7 @@ pub fn breakdown(pages: &PageCounts, page_size: u64) -> Breakdown {
         app,
         wired,
         compressed,
+        compressor_stored: pages.stored_in_compressor * page_size,
         cached: (pages.external + pages.purgeable) * page_size,
         free: pages.free * page_size,
     }
@@ -92,6 +100,7 @@ fn read_pages() -> anyhow::Result<PageCounts> {
         purgeable: u64::from(stats.purgeable_count),
         wired: u64::from(stats.wire_count),
         compressor: u64::from(stats.compressor_page_count),
+        stored_in_compressor: stats.total_uncompressed_pages_in_compressor,
         external: u64::from(stats.external_page_count),
         free: u64::from(stats.free_count),
     })
@@ -143,6 +152,7 @@ impl MemorySampler {
             swap_used_bytes: swap.map_or(0, |s| s.xsu_used),
             swap_total_bytes: swap.map_or(0, |s| s.xsu_total),
             pressure: level.map_or(MemoryPressure::Unspecified, pressure_from_level) as i32,
+            compressor_stored_bytes: b.compressor_stored,
         }
     }
 }
@@ -161,6 +171,7 @@ mod tests {
             compressor: 612_408,
             external: 217_311,
             free: 7_947,
+            ..PageCounts::default()
         };
         let b = breakdown(&pages, 16_384);
         assert_eq!(b.app, 428_797 * 16_384);
@@ -169,6 +180,20 @@ mod tests {
         assert_eq!(b.used, b.app + b.wired + b.compressed);
         assert_eq!(b.used, 1_294_216 * 16_384);
         assert_eq!(b.cached, 217_315 * 16_384);
+    }
+
+    #[test]
+    fn compressor_stored_is_the_pages_it_holds_at_full_size() {
+        // From one `vm_stat` on this machine: "Pages stored in compressor"
+        // 1352566, "Pages occupied by compressor" 690659, 16 KiB pages.
+        let pages = PageCounts {
+            compressor: 690_659,
+            stored_in_compressor: 1_352_566,
+            ..PageCounts::default()
+        };
+        let b = breakdown(&pages, 16_384);
+        assert_eq!(b.compressor_stored, 22_160_441_344, "about 22.2 GB stored");
+        assert_eq!(b.compressed, 11_315_757_056, "in about 11.3 GB of RAM");
     }
 
     #[test]

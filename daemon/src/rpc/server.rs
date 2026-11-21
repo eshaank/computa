@@ -70,18 +70,27 @@ impl Monitor for MonitorService {
         &self,
         request: Request<WatchProcessesRequest>,
     ) -> Result<Response<Self::WatchProcessesStream>, Status> {
-        let requested = request.into_inner().interval_ms;
+        let request = request.into_inner();
+        let (requested, network) = (request.interval_ms, request.include_network);
         let interval_ms = processes::round_interval(requested);
-        tracing::debug!(requested, interval_ms, "starting a WatchProcesses stream");
+        tracing::debug!(
+            requested,
+            interval_ms,
+            network,
+            "starting a WatchProcesses stream"
+        );
         let interval = Duration::from_millis(u64::from(interval_ms));
-        let subscription = self.processes.subscribe(interval).map_err(|error| {
-            tracing::error!(
-                error = format!("{error:#}"),
-                "could not start process sampling"
-            );
-            Status::internal("could not start process sampling")
-        })?;
-        let stream = processes::stream(subscription, interval);
+        let subscription = self
+            .processes
+            .subscribe_with(interval, network)
+            .map_err(|error| {
+                tracing::error!(
+                    error = format!("{error:#}"),
+                    "could not start process sampling"
+                );
+                Status::internal("could not start process sampling")
+            })?;
+        let stream = processes::stream(subscription, interval, network);
         Ok(Response::new(Box::pin(stream)))
     }
 

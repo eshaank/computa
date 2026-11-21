@@ -37,6 +37,7 @@ fn session(s: &SessionInfo, table: &ProcessTable) -> Session {
         label: s.label.clone(),
         cpu_percent: windows.iter().map(|w| w.cpu_percent).sum(),
         memory_bytes: windows.iter().map(|w| w.memory_bytes).sum(),
+        resident_bytes: windows.iter().map(|w| w.resident_bytes).sum(),
         process_count: windows.iter().map(|w| w.process_count).sum(),
         windows,
     }
@@ -49,6 +50,7 @@ fn window(w: &WindowInfo, table: &ProcessTable) -> SessionWindow {
         label: w.label.clone(),
         cpu_percent: panes.iter().map(|p| p.cpu_percent).sum(),
         memory_bytes: panes.iter().map(|p| p.memory_bytes).sum(),
+        resident_bytes: panes.iter().map(|p| p.resident_bytes).sum(),
         process_count: panes.iter().map(|p| p.process_count).sum(),
         panes,
     }
@@ -70,6 +72,7 @@ pub fn pane(p: &PaneInfo, table: &ProcessTable) -> Pane {
     if let Some(sub) = subtree {
         out.cpu_percent = sub.cpu_percent;
         out.memory_bytes = sub.memory_bytes;
+        out.resident_bytes = sub.resident_bytes;
         out.process_count = sub.process_count;
         let entries = sub.pids.iter().filter_map(|&pid| table.get(pid));
         for e in entries {
