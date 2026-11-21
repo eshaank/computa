@@ -32,7 +32,7 @@ struct PaneIcon: View {
                 Image(systemName: symbol)
                     .font(.system(size: size * 0.52, weight: .semibold))
                     .foregroundStyle(kind == .claude ? Theme.sessions : Theme.text.opacity(0.8))
-                    .shadow(color: kind == .claude ? Theme.sessions.opacity(0.7) : .clear, radius: 3)
+                    .glow(Theme.sessions, isOn: kind == .claude)
             )
             .accessibilityHidden(true)
     }

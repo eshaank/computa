@@ -81,7 +81,7 @@ struct ThemeSwitchStyle: ToggleStyle {
             ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                 Capsule()
                     .fill(configuration.isOn ? Theme.accent : Theme.track)
-                    .shadow(color: configuration.isOn ? Theme.accent.opacity(0.45) : .clear, radius: 5)
+                    .glow(Theme.accent, isOn: configuration.isOn)
                 Capsule()
                     .fill(Color(hex: 0xEDEBF7))
                     .frame(width: 26, height: 19)

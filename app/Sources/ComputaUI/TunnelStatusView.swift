@@ -12,7 +12,7 @@ struct TunnelStatusView: View {
             Image(systemName: symbol)
                 .font(.system(size: 28, weight: .light))
                 .foregroundStyle(tint)
-                .shadow(color: tint.opacity(isUnreachable ? 0.6 : 0), radius: 6)
+                .glow(tint, isOn: isUnreachable)
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.text)

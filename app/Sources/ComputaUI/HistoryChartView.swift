@@ -16,7 +16,7 @@ struct HistoryChartView: View {
             ZStack(alignment: .topLeading) {
                 guideLines(layout)
                 bars(layout)
-                    .shadow(color: tab.color.opacity(0.5), radius: 6)
+                    .glow(tab.color)
                 // Without bars the scale is a placeholder, so its values are not shown.
                 if !model.bars.isEmpty { pills(layout) }
                 if model.bars.isEmpty, let message {

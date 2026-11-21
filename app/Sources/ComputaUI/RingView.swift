@@ -47,8 +47,7 @@ public struct RingView: View {
                     .trim(from: 0, to: max(0.001, min(1, fraction)))
                     .stroke(color, style: StrokeStyle(lineWidth: Metrics.ringLineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: color.opacity(0.75), radius: 4)
-                    .shadow(color: color.opacity(0.35), radius: 9)
+                    .glow(color)
             }
             VStack(spacing: 3) {
                 Image(systemName: symbol)

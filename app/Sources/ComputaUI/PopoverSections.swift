@@ -116,7 +116,7 @@ struct DaemonDownSection: View {
             Image(systemName: "bolt.horizontal.circle")
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(Theme.warning)
-                .shadow(color: Theme.warning.opacity(0.6), radius: 6)
+                .glow(Theme.warning)
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.text)

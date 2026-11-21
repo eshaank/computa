@@ -95,7 +95,7 @@ struct ShareBar: View {
                             .frame(width: minimum + usable * CGFloat(share.fraction))
                     }
                 }
-                .shadow(color: Theme.sessions.opacity(0.5), radius: 6)
+                .glow(Theme.sessions)
             }
         }
         .frame(height: 10)

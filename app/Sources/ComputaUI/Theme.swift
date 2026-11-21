@@ -25,6 +25,20 @@ public enum Theme {
     public static let divider = Color.white.opacity(0.08)
 }
 
+/// The soft coloured glow behind bright marks. Every glow in the UI uses these two numbers.
+public enum Glow {
+    /// How strong the glow colour is, from 0 (none) to 1.
+    public static let opacity: Double = 0.15
+    public static let radius: CGFloat = 3
+}
+
+extension View {
+    /// A faint glow in `color`. Pass `isOn: false` for the same layout with no glow.
+    func glow(_ color: Color, isOn: Bool = true) -> some View {
+        shadow(color: color.opacity(isOn ? Glow.opacity : 0), radius: Glow.radius)
+    }
+}
+
 extension Color {
     /// A colour from a 24-bit `0xRRGGBB` value, in sRGB.
     init(hex: UInt32) {

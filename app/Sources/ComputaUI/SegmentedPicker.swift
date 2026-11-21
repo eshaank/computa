@@ -33,7 +33,7 @@ struct SegmentedPicker<Item: Hashable & Identifiable>: View {
                 if selected {
                     RoundedRectangle(cornerRadius: (height - 4) / 2, style: .continuous)
                         .fill(tint(item))
-                        .shadow(color: tint(item).opacity(0.45), radius: 5)
+                        .glow(tint(item))
                 }
             }
             .contentShape(Rectangle())

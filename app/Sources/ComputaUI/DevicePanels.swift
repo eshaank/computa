@@ -126,7 +126,7 @@ struct UsageBar: View {
                 Capsule()
                     .fill(color)
                     .frame(width: proxy.size.width * CGFloat(min(1, max(0, fraction))))
-                    .shadow(color: color.opacity(0.5), radius: 4)
+                    .glow(color)
             }
         }
         .frame(height: 6)
