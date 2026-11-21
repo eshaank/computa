@@ -49,18 +49,18 @@ struct MachineMenu<Label: View>: View {
 /// The machine's name with the up-down chevron that says it opens a menu.
 struct MachineTitle: View {
     let name: String
-    var font: Font = .rowLabel
+    var font: Font = .body
 
     var body: some View {
         HStack(spacing: 4) {
             Text(name)
                 .font(font)
-                .foregroundStyle(Theme.text)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 8.5, weight: .bold))
-                .foregroundStyle(Theme.dimText)
+                .font(.caption2.weight(.semibold))
+                .imageScale(.small)
+                .foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
     }
@@ -80,8 +80,8 @@ struct MachineSwitcherRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     MachineTitle(name: machine.name)
                     Text(detail)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.dimText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -89,8 +89,8 @@ struct MachineSwitcherRow: View {
                 Spacer(minLength: 4)
                 if let value {
                     Text(value)
-                        .font(.rowValue)
-                        .foregroundStyle(Theme.dimText)
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .fixedSize()
                         .layoutPriority(2)
@@ -135,9 +135,9 @@ public struct MachineMenuPreview: View {
     private func item(_ title: String, ticked: Bool) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "checkmark")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .opacity(ticked ? 1 : 0)
-            Text(title).font(.system(size: 13))
+            Text(title).font(.body)
             Spacer(minLength: 0)
         }
         .foregroundStyle(Color.white.opacity(0.9))

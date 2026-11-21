@@ -2,8 +2,8 @@ import ComputaCore
 import Foundation
 import Synchronization
 
-/// Calls what the dashboard uses: GetHistory for each range, the first process snapshot, then
-/// the first sessions snapshot.
+/// Calls what the dashboard uses: GetHistory for each range, the first process snapshot, the
+/// second snapshot of a stream with traffic, then the first sessions snapshot.
 /// Each failure is printed with the problem the dashboard would show, and the probe goes on.
 func probeDashboard(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> Bool {
     var allPassed = true
@@ -17,26 +17,69 @@ func probeDashboard(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> B
             report("history \(range.title)", error, endpoint)
         }
     }
-    do {
-        let first = Mutex<ProcessSnapshot?>(nil)
-        try await client.watchProcesses(intervalMilliseconds: ProcessStore.intervalMilliseconds) { snapshot in
-            first.withLock { $0 = snapshot }
-            return false
-        }
-        if let snapshot = first.withLock({ $0 }) {
-            let top = ProcessList.sorted(snapshot.groups, by: .memory).prefix(5)
-                .map { "\($0.name) \($0.badge ?? "") \(Format.memory($0.residentBytes)) in RAM, \(Format.memory($0.memoryBytes)) total" }
-            print("processes: \(snapshot.groups.count) groups, \(snapshot.processCount) processes; top: \(top.joined(separator: ", "))")
-        } else {
-            allPassed = false
-            print("processes: the stream ended before the first snapshot")
-        }
-    } catch {
-        allPassed = false
-        report("processes", error, endpoint)
-    }
+    if !(await probeProcesses(client, endpoint: endpoint)) { allPassed = false }
+    if !(await probeTraffic(client, endpoint: endpoint)) { allPassed = false }
     if !(await probeSessions(client, endpoint: endpoint)) { allPassed = false }
     return allPassed
+}
+
+/// The first process snapshot: the top five by memory in RAM, with all three memory figures.
+private func probeProcesses(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> Bool {
+    do {
+        guard let snapshot = try await snapshots(client, count: 1, traffic: false).first else {
+            print("processes: the stream ended before the first snapshot")
+            return false
+        }
+        let reported = snapshot.reportsResidentSize
+        let top = ProcessList.sorted(snapshot.groups, by: .memory, residentReported: reported).prefix(5).map { group in
+            let figures = MemoryFigures(group, residentReported: reported)
+            return "\(group.name) \(group.badge ?? "") mem \(figures.mem), compressed+swap ~\(figures.compressedOrSwapped), footprint \(figures.footprint)"
+        }
+        print("processes: \(snapshot.groups.count) groups, \(snapshot.processCount) processes; top: \(top.joined(separator: "; "))")
+        return true
+    } catch {
+        report("processes", error, endpoint)
+        return false
+    }
+}
+
+/// The second snapshot of a stream that asks for traffic: the first never has rates yet.
+private func probeTraffic(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> Bool {
+    do {
+        let received = try await snapshots(client, count: 2, traffic: true)
+        guard let snapshot = received.last else {
+            print("traffic: the stream ended before the first snapshot")
+            return false
+        }
+        switch TrafficAvailability(snapshot.network) {
+        case .daemonNeedsUpdate:
+            print("traffic: the daemon sent no network status; it needs an update")
+        case .measuring:
+            print("traffic: still measuring after \(received.count) snapshots")
+        case .problem(let problem):
+            print("traffic: not available: \(problem)")
+        case .available:
+            let top = ProcessList.sorted(snapshot.groups, by: .network).prefix(5).map { group in
+                let figures = TrafficFigures(group)
+                return "\(group.name) down \(figures.down) up \(figures.up)"
+            }
+            print("traffic: \(top.joined(separator: "; "))")
+        }
+        return true
+    } catch {
+        report("traffic", error, endpoint)
+        return false
+    }
+}
+
+/// The first `count` snapshots of a process stream.
+private func snapshots(_ client: DaemonClient, count: Int, traffic: Bool) async throws -> [ProcessSnapshot] {
+    let received = Mutex<[ProcessSnapshot]>([])
+    try await client.watchProcesses(intervalMilliseconds: ProcessStore.intervalMilliseconds, includeNetwork: traffic) { snapshot in
+        received.withLock { $0.append(snapshot) }
+        return received.withLock { $0.count } < count
+    }
+    return received.withLock { $0 }
 }
 
 private func report(_ what: String, _ error: any Error, _ endpoint: DaemonEndpoint) {

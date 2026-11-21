@@ -9,12 +9,39 @@ public struct ProcessSnapshot: Sendable, Equatable {
     public var hidden: HiddenProcesses?
     /// Every process on the machine, readable or not.
     public var processCount: Int
+    /// Whether the per-process network rates can be trusted. Nil when the daemon sent no status:
+    /// the request did not ask for traffic, or the daemon is too old to measure it.
+    public var network: ProcessNetworkStatus?
 
-    public init(time: Date, groups: [ProcessGroup], hidden: HiddenProcesses?, processCount: Int) {
+    public init(
+        time: Date, groups: [ProcessGroup], hidden: HiddenProcesses?, processCount: Int,
+        network: ProcessNetworkStatus? = nil
+    ) {
         self.time = time
         self.groups = groups
         self.hidden = hidden
         self.processCount = processCount
+        self.network = network
+    }
+
+    /// False when no process reports a resident size: a daemon older than the field sends 0
+    /// for it. The Mem column then says "not reported" instead of a wrong "0 B".
+    public var reportsResidentSize: Bool {
+        groups.contains { group in group.processes.contains { $0.residentBytes > 0 } }
+    }
+}
+
+/// Whether a snapshot's per-process network rates can be trusted.
+public struct ProcessNetworkStatus: Sendable, Equatable {
+    /// False before the daemon has two readings to compare, and when it cannot measure. Every
+    /// rate is then 0.
+    public var available: Bool
+    /// Why the rates are not available, in words a person can act on. Empty otherwise.
+    public var problem: String
+
+    public init(available: Bool, problem: String = "") {
+        self.available = available
+        self.problem = problem
     }
 }
 
@@ -32,7 +59,15 @@ public struct ProcessGroup: Sendable, Equatable, Identifiable {
     public var processes: [ProcessEntry]
 
     /// Memory in RAM now, added up over the group's processes. See `ProcessEntry.residentBytes`.
+    /// Summed here rather than taken from the daemon, which an older daemon sends as 0.
     public var residentBytes: UInt64 { processes.reduce(0) { $0 + $1.residentBytes } }
+
+    /// Footprint minus what is in RAM, never below zero: roughly what is compressed or in swap.
+    public var compressedOrSwappedBytes: UInt64 { memoryBytes.subtractingClamped(residentBytes) }
+
+    /// Download and upload rates added up over the group's processes, in bytes per second.
+    public var receiveBytesPerSecond: Double { processes.reduce(0) { $0 + $1.receiveBytesPerSecond } }
+    public var sendBytesPerSecond: Double { processes.reduce(0) { $0 + $1.sendBytesPerSecond } }
 
     /// The id the daemon gives the group of system processes.
     public static let systemID = "system"
@@ -73,12 +108,21 @@ public struct ProcessEntry: Sendable, Equatable, Identifiable {
     /// What is in RAM right now (resident size). It leaves out compressed and swapped memory,
     /// and counts a page shared between processes once in each of them.
     public var residentBytes: UInt64
+    /// Network traffic over every interface, loopback included, in bytes per second. Zero
+    /// unless the stream asked for traffic.
+    public var receiveBytesPerSecond: Double
+    public var sendBytesPerSecond: Double
 
     public var id: Int32 { pid }
 
+    /// Footprint minus resident size, never below zero (a process can have more in RAM than its
+    /// footprint, since shared pages count in full): roughly what is compressed or in swap.
+    public var compressedOrSwappedBytes: UInt64 { memoryBytes.subtractingClamped(residentBytes) }
+
     public init(
         pid: Int32, parentPid: Int32, name: String, path: String, cpuPercent: Double,
-        memoryBytes: UInt64, residentBytes: UInt64
+        memoryBytes: UInt64, residentBytes: UInt64,
+        receiveBytesPerSecond: Double = 0, sendBytesPerSecond: Double = 0
     ) {
         self.pid = pid
         self.parentPid = parentPid
@@ -87,7 +131,14 @@ public struct ProcessEntry: Sendable, Equatable, Identifiable {
         self.cpuPercent = cpuPercent
         self.memoryBytes = memoryBytes
         self.residentBytes = residentBytes
+        self.receiveBytesPerSecond = receiveBytesPerSecond
+        self.sendBytesPerSecond = sendBytesPerSecond
     }
+}
+
+extension UInt64 {
+    /// `self - other`, or 0 when `other` is larger.
+    public func subtractingClamped(_ other: UInt64) -> UInt64 { self > other ? self - other : 0 }
 }
 
 /// Processes owned by root or other users, whose usage a daemon running as the user cannot read.
@@ -108,7 +159,10 @@ extension ProcessSnapshot {
             hidden: message.hasHidden
                 ? HiddenProcesses(processCount: Int(message.hidden.processCount))
                 : nil,
-            processCount: Int(message.processCount)
+            processCount: Int(message.processCount),
+            network: message.hasNetwork
+                ? ProcessNetworkStatus(available: message.network.available, problem: message.network.problem)
+                : nil
         )
     }
 }
@@ -121,7 +175,20 @@ extension ProcessGroup {
             bundlePath: message.bundlePath,
             cpuPercent: message.cpuPercent,
             memoryBytes: message.memoryBytes,
-            processes: message.processes.map(ProcessEntry.init)
+            processes: message.processes.map(ProcessEntry.withTraffic)
+        )
+    }
+}
+
+extension ProcessEntry {
+    /// A process from the process stream, with its network rates. (Session snapshots map
+    /// processes without them, in `SessionModels.swift`.)
+    /// A static function rather than an initialiser, so `ProcessEntry.init` stays unambiguous.
+    package static func withTraffic(_ message: Computa_V1_Process) -> ProcessEntry {
+        ProcessEntry(
+            pid: message.pid, parentPid: message.parentPid, name: message.name, path: message.path,
+            cpuPercent: message.cpuPercent, memoryBytes: message.memoryBytes, residentBytes: message.residentBytes,
+            receiveBytesPerSecond: message.rxBytesPerSec, sendBytesPerSecond: message.txBytesPerSec
         )
     }
 }

@@ -31,6 +31,11 @@ public struct PopoverContent: Sendable, Equatable {
         self.machine = machine
     }
 
+    /// Under "Claude Code": which memory figure the row's size is. `ClaudeUsage.popoverText`
+    /// adds up the panes' `memoryBytes`, which are footprints; change this with it.
+    static let claudeMemoryNote = "Footprint of its panes"
+    static let claudeMemoryHelp = "Footprint: everything the panes' processes have allocated, compressed and swapped memory included. It is the Footprint column on the Mem tab, not Mem (in RAM)."
+
     /// Prevent Sleep's subtitle: it always acts on the Mac running the app.
     var preventSleepNote: String? {
         machine.isRemote ? "Keeps this Mac awake" : nil
@@ -63,8 +68,8 @@ public struct PopoverActions: Sendable {
     public static let none = PopoverActions(setPreventSleep: { _ in }, openDashboard: {}, openPreferences: {}, quit: {})
 }
 
-/// The popover under the menu bar item: a panel with rings and rows, and a separate capsule
-/// with Preferences and Quit below it, as in the reference.
+/// The popover under the menu bar item: a Liquid Glass panel with rings, rows and Prevent
+/// Sleep, and glass buttons below it, as in the reference.
 public struct PopoverView: View {
     let content: PopoverContent
     let actions: PopoverActions
@@ -74,13 +79,25 @@ public struct PopoverView: View {
         self.actions = actions
     }
 
+    @Environment(\.drawsGlass) private var drawsGlass
+
     public var body: some View {
-        VStack(spacing: Metrics.gapToCapsule) {
-            panel
-            bottomCapsule
+        Group {
+            if drawsGlass {
+                GlassEffectContainer(spacing: Metrics.gapToCapsule) { stack }
+            } else {
+                stack
+            }
         }
         .frame(width: Metrics.popoverWidth)
         .environment(\.colorScheme, .dark)
+    }
+
+    private var stack: some View {
+        VStack(spacing: Metrics.gapToCapsule) {
+            panel
+            buttons
+        }
     }
 
     private var panel: some View {
@@ -96,17 +113,8 @@ public struct PopoverView: View {
             )
             .padding(.horizontal, Metrics.sidePadding)
             .padding(.vertical, 8)
-            SectionDivider()
-            Button(action: { actions.openDashboard() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chart.bar.xaxis")
-                    Text("Open Dashboard")
-                }
-                .frame(maxWidth: .infinity, minHeight: 40)
-            }
-            .buttonStyle(ThemeButtonStyle())
         }
-        .background(PanelShape(cornerRadius: Metrics.panelCornerRadius))
+        .popoverGlass(drawsGlass)
     }
 
     /// Rings and rows; or why there are none: the tunnel is down, or the daemon does not
@@ -137,29 +145,63 @@ public struct PopoverView: View {
             .padding(.vertical, 6)
     }
 
-    private var bottomCapsule: some View {
-        HStack {
-            Button("Preferences") { actions.openPreferences() }
-            Spacer()
-            Button("Quit") { actions.quit() }
+    /// Open Dashboard, then Preferences and Quit, as glass buttons.
+    private var buttons: some View {
+        VStack(spacing: 8) {
+            Button { actions.openDashboard() } label: {
+                Label("Open Dashboard", systemImage: "chart.bar.xaxis")
+                    .frame(maxWidth: .infinity)
+            }
+            .popoverButtonStyle(drawsGlass, prominent: true)
+            .tint(Theme.accent.opacity(0.75))
+            HStack(spacing: 8) {
+                Button { actions.openPreferences() } label: {
+                    Text("Preferences…").frame(maxWidth: .infinity)
+                }
+                Button { actions.quit() } label: {
+                    Text("Quit").frame(maxWidth: .infinity)
+                }
+            }
+            .popoverButtonStyle(drawsGlass, prominent: false)
         }
-        .buttonStyle(ThemeButtonStyle())
-        .padding(.horizontal, Metrics.sidePadding)
-        .frame(height: Metrics.capsuleHeight)
-        .background(PanelShape(cornerRadius: Metrics.capsuleHeight / 2))
+        .controlSize(.large)
     }
 }
 
-/// The popover's rounded background with a hairline edge.
-struct PanelShape: View {
-    let cornerRadius: CGFloat
+/// The popover's glass: tinted toward the theme's background so white text stays readable
+/// over a bright desktop.
+enum PopoverGlass {
+    static let panel = Glass.regular.tint(Theme.background.opacity(0.55))
+}
 
-    var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Theme.background)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-            )
+extension EnvironmentValues {
+    /// False draws plain fills where the popover would use Liquid Glass. Glass needs a live
+    /// window behind it, and an offscreen render of it comes out blank, so the snapshot tool
+    /// turns it off.
+    @Entry public var drawsGlass = true
+}
+
+extension View {
+    /// The panel's glass, or the same shape filled with the tint when glass is off.
+    @ViewBuilder
+    fileprivate func popoverGlass(_ glass: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Metrics.panelCornerRadius, style: .continuous)
+        if glass {
+            glassEffect(PopoverGlass.panel, in: shape)
+        } else {
+            background(shape.fill(Theme.background.opacity(0.92)))
+                .overlay(shape.strokeBorder(.separator, lineWidth: 0.5))
+        }
+    }
+
+    /// Glass buttons, or bordered ones when glass is off.
+    @ViewBuilder
+    fileprivate func popoverButtonStyle(_ glass: Bool, prominent: Bool) -> some View {
+        switch (glass, prominent) {
+        case (true, true): buttonStyle(.glassProminent)
+        case (true, false): buttonStyle(.glass)
+        case (false, true): buttonStyle(.borderedProminent)
+        case (false, false): buttonStyle(.bordered)
+        }
     }
 }

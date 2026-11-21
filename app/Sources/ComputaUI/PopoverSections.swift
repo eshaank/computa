@@ -47,7 +47,7 @@ struct StatusRows: View {
             if content.machine.showsSwitcher, content.sample == nil {
                 MachineSwitcherRow(machine: content.machine, value: nil, detail: connectingText, switching: switching)
             } else if content.sample == nil, content.machine.isRemote {
-                InfoRow(label: "Connecting…", value: content.machine.name, detail: connectingText, valueColor: Theme.dimText)
+                InfoRow(label: "Connecting…", value: content.machine.name, detail: connectingText, valueColor: .secondary)
             }
             if let sample = content.sample {
                 machineRow(time: sample.time)
@@ -63,10 +63,11 @@ struct StatusRows: View {
                     InfoRow(label: "Memory Pressure", value: pressure, valueColor: Theme.warning)
                 }
                 if let claude = content.claudeSummary {
-                    InfoRow(label: "Claude Code", value: claude, valueColor: Theme.sessions)
+                    InfoRow(label: "Claude Code", value: claude, detail: PopoverContent.claudeMemoryNote, valueColor: Theme.sessions)
+                        .help(PopoverContent.claudeMemoryHelp)
                 }
             } else if !content.machine.showsSwitcher, !content.machine.isRemote {
-                InfoRow(label: "Connecting…", value: content.endpoint.description, valueColor: Theme.dimText)
+                InfoRow(label: "Connecting…", value: content.endpoint.description, valueColor: .secondary)
             }
         }
         .padding(.horizontal, Metrics.sidePadding)
@@ -93,7 +94,7 @@ struct StatusRows: View {
                 label: host.hostname,
                 value: "up \(Format.uptime(since: host.bootTime, now: time))",
                 detail: host.chip,
-                valueColor: Theme.dimText
+                valueColor: .secondary
             )
         }
     }
@@ -114,20 +115,19 @@ struct DaemonDownSection: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "bolt.horizontal.circle")
-                .font(.system(size: 30, weight: .light))
+                .font(.largeTitle.weight(.light))
                 .foregroundStyle(Theme.warning)
                 .glow(Theme.warning)
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.text)
+                .font(.headline)
             Text(problem.summary)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.text.opacity(0.8))
+                .font(.callout)
+                .foregroundStyle(.secondary)
             Text(problem.kind == .unsupported
                 ? "Update computad; Computa picks it up by itself."
                 : "Computa will reconnect by itself as soon as it answers.")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)

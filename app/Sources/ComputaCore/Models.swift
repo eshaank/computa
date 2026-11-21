@@ -94,6 +94,10 @@ public struct MemorySample: Sendable, Equatable {
     public var swapUsedBytes: UInt64
     public var swapTotalBytes: UInt64
     public var pressure: MemoryPressure
+    /// The data the compressor holds, at its size before compression. `compressedBytes` is the
+    /// RAM that data takes up. Zero when the daemon does not report it (it is older than the
+    /// field).
+    public var compressorStoredBytes: UInt64 = 0
 
     /// Used memory as a share of total, 0...100. Zero when the total is unknown.
     public var usedPercent: Double { Ratio.percent(usedBytes, of: totalBytes) }

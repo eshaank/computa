@@ -41,8 +41,8 @@ public struct DashboardContent: Sendable, Equatable {
     }
 }
 
-/// The dashboard window: tabs, a history chart, and the tab's list below it, laid out like the
-/// reference. The selected tab, range, search text, expanded groups and the Sessions tab's sort
+/// The dashboard window: the tabs as a segmented control in the toolbar, as in Activity
+/// Monitor, the machine in the title, a history chart, and the tab's list below it. The selected tab, range, search text, expanded groups and the Sessions tab's sort
 /// and open rows are bindings, so the app owns them and snapshots can set them.
 public struct DashboardView: View {
     let content: DashboardContent
@@ -73,10 +73,7 @@ public struct DashboardView: View {
 
     public var body: some View {
         VStack(spacing: 12) {
-            DashboardTabBar(tab: $tab)
-                .padding(.top, 14)
             if let tunnel = content.machine.pendingTunnel {
-                infoLine
                 TunnelStatusView(machine: content.machine, state: tunnel)
                     .background(DashboardPanel())
                 Spacer(minLength: 0)
@@ -84,29 +81,36 @@ public struct DashboardView: View {
                 stateBody
             }
         }
-        .padding(.horizontal, DashboardMetrics.sidePadding)
-        .padding(.bottom, DashboardMetrics.sidePadding)
+        .padding(DashboardMetrics.sidePadding)
         .frame(
             minWidth: DashboardMetrics.minimumSize.width, maxWidth: .infinity,
             minHeight: DashboardMetrics.minimumSize.height, maxHeight: .infinity, alignment: .top
         )
         .background(Theme.background)
+        .toolbar {
+            DashboardToolbar(tab: $tab, machine: content.machine, switching: machines)
+        }
+        .navigationTitle(windowTitle)
+        .navigationSubtitle(content.host?.chip ?? "")
         .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
     }
 
-    /// Numbers while connected; otherwise why not. The host line stays when there is a machine
-    /// to switch to.
+    /// The machine's host name, as Activity Monitor names the Mac it watches.
+    private var windowTitle: String {
+        if content.machine.pendingTunnel == nil, let host = content.host { return host.hostname }
+        return content.machine.name
+    }
+
+    /// Numbers while connected; otherwise why not.
     @ViewBuilder
     private var stateBody: some View {
         switch content.state {
         case .connected:
             connectedBody
         case .connecting:
-            if content.machine.showsSwitcher { infoLine }
             ConnectingPanel(endpoint: content.endpoint, machine: content.machine)
-            Spacer(minLength: 0)
         case .daemonNotRunning(let problem):
-            if content.machine.showsSwitcher { infoLine }
             DaemonDownSection(problem: problem)
                 .background(DashboardPanel())
             Spacer(minLength: 0)
@@ -115,12 +119,15 @@ public struct DashboardView: View {
 
     @ViewBuilder
     private var connectedBody: some View {
-        infoLine
         if tab.showsHistory {
             VStack(spacing: 8) {
+                ChartHeader(tab: tab, sample: content.sample, range: $range)
                 HistoryChartView(model: chartModel, tab: tab, message: chartMessage)
                     .frame(height: DashboardMetrics.chartHeight)
                 ChartLegend(entries: tab.legend(content.sample), headline: tab.headline(content.sample))
+                if tab == .memory, let memory = content.sample?.memory {
+                    MemoryLegendDetail(memory: memory)
+                }
             }
             tabBody
         } else {
@@ -132,65 +139,24 @@ public struct DashboardView: View {
         }
     }
 
-    /// The machine on the left (a menu when there are several), the range picker on the right.
-    private var infoLine: some View {
-        let showsRange = tab.showsHistory && content.state.isConnected && content.machine.pendingTunnel == nil
-        return HStack(spacing: 8) {
-            if content.machine.showsSwitcher {
-                MachineMenu(machine: content.machine, switching: machines) {
-                    HStack(spacing: 8) {
-                        MachineTitle(name: content.machine.name, font: .system(size: 12, weight: .semibold))
-                        hostText
-                    }
-                }
-            } else {
-                hostText
-            }
-            Spacer(minLength: 8)
-            // Hidden rather than removed on the Sessions tab, so the line keeps its height.
-            RangePicker(range: $range, tint: tab.color)
-                .opacity(showsRange ? 1 : 0)
-                .allowsHitTesting(showsRange)
-                .accessibilityHidden(!showsRange)
-        }
-    }
-
-    /// The daemon's host name and chip; with several machines the name is dim, after the menu.
-    @ViewBuilder
-    private var hostText: some View {
-        if let host = content.host {
-            Text(host.hostname)
-                .font(.system(size: content.machine.showsSwitcher ? 11 : 12, weight: content.machine.showsSwitcher ? .regular : .semibold))
-                .foregroundStyle(content.machine.showsSwitcher ? Theme.dimText : Theme.text)
-                .lineLimit(1)
-            Text(host.chip)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
-                .lineLimit(1)
-        }
-    }
-
     @ViewBuilder
     private var tabBody: some View {
-        if let metric = tab.processMetric {
-            SearchField(text: $query)
-            processPanel(metric)
-        } else if let sample = content.sample {
-            if tab == .network { NetworkPanel(network: sample.network) } else { DiskPanel(sample: sample) }
+        switch tab {
+        case .network:
+            if let sample = content.sample { NetworkPanel(network: sample.network) }
+            processSection(.network)
+        case .disk:
+            if let sample = content.sample { DiskPanel(sample: sample) }
+        case .cpu, .memory, .sessions:
+            if let metric = tab.processMetric { processSection(metric) }
         }
     }
 
     @ViewBuilder
-    private func processPanel(_ metric: ProcessMetric) -> some View {
+    private func processSection(_ metric: ProcessMetric) -> some View {
+        SearchField(text: $query)
         if let snapshot = content.processes {
-            ProcessListView(
-                groups: ProcessList.visible(snapshot.groups, query: query, metric: metric),
-                metric: metric,
-                hidden: metric == .memory && query.trimmingCharacters(in: .whitespaces).isEmpty ? snapshot.hidden : nil,
-                expanded: $expanded,
-                icons: icons
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous))
+            ProcessPanel(snapshot: snapshot, metric: metric, query: query, expanded: $expanded, icons: icons)
         } else if case .daemonNotRunning(let problem) = content.processState {
             VStack {
                 DaemonDownSection(problem: problem)
@@ -198,11 +164,13 @@ public struct DashboardView: View {
             }
             .background(DashboardPanel())
         } else {
-            Text("Loading processes…")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.dimText)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(DashboardPanel())
+            ContentUnavailableView {
+                ProgressView().controlSize(.small)
+            } description: {
+                Text("Loading processes…")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(DashboardPanel())
         }
     }
 

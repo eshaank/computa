@@ -10,16 +10,15 @@ struct TunnelStatusView: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.system(size: 28, weight: .light))
+                .font(.largeTitle.weight(.light))
                 .foregroundStyle(tint)
                 .glow(tint, isOn: isUnreachable)
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.text)
+                .font(.headline)
             ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                 Text(line)
-                    .font(.system(size: 11))
-                    .foregroundStyle(index == 0 ? Theme.text.opacity(0.8) : Theme.dimText)
+                    .font(index == 0 ? .callout : .footnote)
+                    .foregroundStyle(index == 0 ? .secondary : .tertiary)
             }
         }
         .multilineTextAlignment(.center)
@@ -39,7 +38,7 @@ struct TunnelStatusView: View {
         isUnreachable ? "network.slash" : "point.3.connected.trianglepath.dotted"
     }
 
-    private var tint: Color { isUnreachable ? Theme.warning : Theme.dimText }
+    private var tint: Color { isUnreachable ? Theme.warning : .secondary }
 
     private var title: String {
         isUnreachable ? "\(machine.name) unreachable" : "Connecting to \(machine.name)…"

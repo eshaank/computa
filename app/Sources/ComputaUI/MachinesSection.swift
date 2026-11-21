@@ -20,7 +20,8 @@ public struct MachineEditing: Sendable {
     }
 }
 
-/// The Machines section: the list with Edit and Remove, Add Machine, and the form.
+/// The Machines section of the form: the list with Edit and Remove, Add Machine, and the
+/// add/edit form as its own section below.
 struct MachinesSection: View {
     let machines: [Machine]
     let editing: MachineEditing
@@ -31,25 +32,18 @@ struct MachinesSection: View {
     @State private var removeError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Machines")
-                .font(.rowLabel)
-                .foregroundStyle(Theme.text)
-            VStack(spacing: 0) {
-                ForEach(Array(machines.enumerated()), id: \.element.id) { index, machine in
-                    if index > 0 { Rectangle().fill(Theme.divider).frame(height: 1) }
-                    row(machine)
-                }
+        Section {
+            ForEach(machines) { machine in
+                row(machine)
             }
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.panel))
-            if let form = Binding($form) {
-                MachineFormView(form: form, onCancel: { self.form = nil }, onSave: save)
-            } else {
+            if form == nil {
                 Button("Add Machine…") { form = MachineForm(target: .add) }
             }
+        } header: {
+            Text("Machines")
+        } footer: {
             if let problem = removeError ?? storeProblem {
                 Text(problem)
-                    .font(.system(size: 11))
                     .foregroundStyle(Theme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -62,35 +56,29 @@ struct MachinesSection: View {
         } message: { _ in
             Text("Computa stops watching it. Nothing on that Mac changes.")
         }
+        if let form = Binding($form) {
+            MachineFormView(form: form, onCancel: { self.form = nil }, onSave: save)
+        }
     }
 
     private func row(_ machine: Machine) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(machine.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text(Self.summary(machine))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.dimText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer(minLength: 8)
-            Button("Edit") { form = .editing(machine) }
-                .buttonStyle(ThemeButtonStyle(color: Theme.accent))
-            if !machine.isThisMac {
-                Button { pendingRemoval = machine } label: {
-                    Image(systemName: "trash").font(.system(size: 11, weight: .semibold))
+        LabeledContent {
+            HStack(spacing: 8) {
+                Button("Edit") { form = .editing(machine) }
+                if !machine.isThisMac {
+                    Button(role: .destructive) { pendingRemoval = machine } label: {
+                        Image(systemName: "trash")
+                    }
+                    .help("Remove \(machine.name)")
+                    .accessibilityLabel("Remove \(machine.name)")
                 }
-                .buttonStyle(ThemeButtonStyle(color: Theme.dimText))
-                .help("Remove \(machine.name)")
-                .accessibilityLabel("Remove \(machine.name)")
             }
+        } label: {
+            Text(machine.name)
+            Text(Self.summary(machine))
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 
     /// One line: how the machine is reached, and whether Rex actions work on it.

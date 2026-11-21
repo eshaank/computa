@@ -1,12 +1,58 @@
 import ComputaCore
 import SwiftUI
 
-/// The grouped process list in its rounded panel: one row per app with chevron, icon, name,
-/// "+N" badge and value; expanded groups show their processes underneath.
+/// A tab's process section: the list, or on the Net tab why there are no rates yet, and the
+/// Net tab's note on how its rates relate to the chart.
+struct ProcessPanel: View {
+    let snapshot: ProcessSnapshot
+    let metric: ProcessMetric
+    let query: String
+    @Binding var expanded: Set<String>
+    let icons: any AppIconProviding
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            let availability = TrafficAvailability(snapshot.network)
+            if metric == .network, availability != .available {
+                TrafficStatusView(availability: availability)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(DashboardPanel())
+            } else {
+                list
+            }
+            if metric == .network {
+                Text(FigureExplanations.networkCaption)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private var list: some View {
+        let reported = snapshot.reportsResidentSize
+        let blank = query.trimmingCharacters(in: .whitespaces).isEmpty
+        return ProcessListView(
+            groups: ProcessList.visible(snapshot.groups, query: query, metric: metric, residentReported: reported),
+            metric: metric,
+            residentReported: reported,
+            hidden: metric == .memory && blank ? snapshot.hidden : nil,
+            expanded: $expanded,
+            icons: icons
+        )
+    }
+}
+
+/// The grouped process list in its rounded panel, under a header naming its columns: one row
+/// per app with chevron, icon, name, "+N" badge and figures; expanded groups show their
+/// processes underneath.
 struct ProcessListView: View {
     /// Already filtered and sorted.
     let groups: [ProcessGroup]
     let metric: ProcessMetric
+    /// False when the daemon reports no resident sizes; see `ProcessSnapshot.reportsResidentSize`.
+    var residentReported = true
     /// Shown as a last dim row when set (the memory tab only).
     let hidden: HiddenProcesses?
     @Binding var expanded: Set<String>
@@ -14,160 +60,57 @@ struct ProcessListView: View {
     /// Shown when no group matches the search.
     var emptyText = "No process matches."
 
+    private var columns: [ProcessColumn] { ProcessColumn.columns(metric) }
+
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                if metric == .memory, !groups.isEmpty {
-                    MemoryColumnsHeader()
-                }
-                if groups.isEmpty {
-                    Text(emptyText)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.dimText)
-                        .frame(maxWidth: .infinity, minHeight: 60)
-                }
-                ForEach(groups) { group in
-                    GroupRow(group: group, metric: metric, isExpanded: expanded.contains(group.id), icon: icons.icon(for: group)) {
-                        toggle(group)
+        VStack(spacing: 0) {
+            ProcessColumnsHeader(metric: metric, columns: columns, residentReported: residentReported)
+            Divider()
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if groups.isEmpty {
+                        Text(emptyText)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 60)
                     }
-                    if expanded.contains(group.id), group.processes.count > 1 {
-                        ForEach(group.processes) { process in
-                            ProcessRow(
-                                process: process,
-                                value: ProcessList.valueText(ProcessList.value(process, metric), metric),
-                                total: ProcessList.totalText(footprint: process.memoryBytes, metric)
-                            )
-                        }
+                    ForEach(groups) { group in
+                        rows(group)
+                    }
+                    if let hidden {
+                        HiddenProcessesRow(hidden: hidden)
                     }
                 }
-                if let hidden {
-                    HiddenProcessesRow(hidden: hidden)
-                }
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 6)
+            .scrollIndicators(.automatic)
         }
-        .scrollIndicators(.automatic)
         .background(DashboardPanel())
+        .clipShape(RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func rows(_ group: ProcessGroup) -> some View {
+        GroupRow(
+            group: group, figures: ProcessColumn.figures(group, metric, residentReported: residentReported),
+            columns: columns, isExpanded: expanded.contains(group.id), icon: icons.icon(for: group)
+        ) {
+            toggle(group)
+        }
+        if expanded.contains(group.id), group.processes.count > 1 {
+            ForEach(group.processes) { process in
+                ProcessRow(
+                    process: process,
+                    figures: ProcessColumn.figures(process, metric, residentReported: residentReported),
+                    columns: columns
+                )
+            }
+        }
     }
 
     private func toggle(_ group: ProcessGroup) {
         guard group.processes.count > 1 else { return }
         if expanded.contains(group.id) { expanded.remove(group.id) } else { expanded.insert(group.id) }
-    }
-}
-
-/// One app's row.
-struct GroupRow: View {
-    let group: ProcessGroup
-    let metric: ProcessMetric
-    let isExpanded: Bool
-    let icon: AppIcon
-    let onToggle: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.text.opacity(0.75))
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                .frame(width: 10)
-                .opacity(group.processes.count > 1 ? 1 : 0)
-            AppIconView(icon: icon)
-            Text(group.name)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if let badge = group.badge {
-                CountBadge(text: badge)
-            }
-            Spacer(minLength: 8)
-            Text(ProcessList.valueText(ProcessList.value(group, metric), metric))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-            if let total = ProcessList.totalText(footprint: group.memoryBytes, metric) {
-                TotalFigure(text: total, size: 12)
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: DashboardMetrics.rowHeight)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onToggle)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(group.processes.count > 1 ? .isButton : [])
-    }
-}
-
-/// One process inside an expanded group: name, pid and value, indented under the app's name.
-struct ProcessRow: View {
-    let process: ProcessEntry
-    let value: String
-    /// The footprint, in the memory list's second column. Nil where there is one figure.
-    var total: String?
-    /// Where the name starts: under the app's name by default.
-    var indent: CGFloat = 14 + 10 + 10 + DashboardMetrics.iconSize + 10
-    /// Where the value ends.
-    var trailing: CGFloat = 14
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(process.name)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.text.opacity(0.78))
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Text(verbatim: "\(process.pid)")
-                .font(.system(size: 10.5).monospacedDigit())
-                .foregroundStyle(Theme.dimText)
-            Spacer(minLength: 8)
-            Text(value)
-                .font(.system(size: 12).monospacedDigit())
-                .foregroundStyle(Theme.text.opacity(0.78))
-            if let total {
-                TotalFigure(text: total, size: 11)
-            }
-        }
-        .padding(.leading, indent)
-        .padding(.trailing, trailing)
-        .frame(height: 24)
-    }
-}
-
-/// The memory list's second column: the footprint, dimmer than the in-RAM figure beside it.
-struct TotalFigure: View {
-    static let width: CGFloat = 76
-
-    let text: String
-    let size: CGFloat
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: size).monospacedDigit())
-            .foregroundStyle(Theme.dimText)
-            .lineLimit(1)
-            .frame(width: Self.width, alignment: .trailing)
-    }
-}
-
-/// Names the memory list's two columns and says why the second can exceed the RAM installed.
-struct MemoryColumnsHeader: View {
-    var body: some View {
-        HStack(spacing: 10) {
-            Text("Total counts memory macOS has compressed or moved to swap, so it can exceed the RAM installed.")
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Text("In RAM")
-                .foregroundStyle(Theme.text.opacity(0.78))
-            Text("Total")
-                .frame(width: TotalFigure.width, alignment: .trailing)
-        }
-        .font(.system(size: 10.5, weight: .medium))
-        .foregroundStyle(Theme.dimText)
-        .padding(.horizontal, 14)
-        .padding(.top, 4)
-        .padding(.bottom, 6)
     }
 }
 
@@ -177,25 +120,24 @@ struct HiddenProcessesRow: View {
     let hidden: HiddenProcesses
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 8) {
             Color.clear.frame(width: 10, height: 1)
             AppIconView(icon: .symbol("lock.fill"))
                 .opacity(0.7)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Text("Root and other users")
-                        .font(.system(size: 13, weight: .medium))
                     CountBadge(text: "\(hidden.processCount) processes")
                 }
                 Text("Their usage can't be read unless computad runs as root.")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.dimText)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .foregroundStyle(Theme.text.opacity(0.55))
-        .padding(.horizontal, 14)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, ProcessListMetrics.rowPadding)
         .padding(.vertical, 8)
     }
 }
@@ -206,23 +148,24 @@ struct CountBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10.5, weight: .medium).monospacedDigit())
-            .foregroundStyle(Theme.text.opacity(0.6))
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.white.opacity(0.08)))
+            .padding(.vertical, 1)
+            .background(Capsule().fill(.quaternary))
             .fixedSize()
     }
 }
 
-/// The rounded panel behind the lists, with a hairline edge.
+/// The rounded panel behind the lists: a faint fill on the window background with a hairline
+/// edge, like a grouped form's sections.
 struct DashboardPanel: View {
     var body: some View {
         RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous)
-            .fill(Theme.panel)
+            .fill(.quinary)
             .overlay(
                 RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(.separator, lineWidth: 0.5)
             )
     }
 }

@@ -24,7 +24,7 @@ struct ComputaApp: App {
         Window("Computa Dashboard", id: WindowID.dashboard) {
             DashboardHost(model: model)
         }
-        .defaultSize(width: 460, height: 760)
+        .defaultSize(width: 760, height: 820)
         .windowResizability(.contentMinSize)
         .defaultLaunchBehavior(.suppressed)
 
@@ -38,7 +38,7 @@ struct ComputaApp: App {
                 saveRexCommand: { model.saveRexCommand($0) }
             )
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .defaultLaunchBehavior(.suppressed)
     }
 }

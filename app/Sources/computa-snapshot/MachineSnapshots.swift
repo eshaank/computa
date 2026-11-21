@@ -47,7 +47,7 @@ private func renderMachinePopovers() throws {
             state: state, sample: Fixtures.sample, host: host, endpoint: machine.tunnel?.endpoint ?? .local,
             preventSleepOn: false, preventSleepError: nil, machine: machine
         )
-        try render(PopoverView(content: content, actions: .none), named: name)
+        try renderHosted(PopoverView(content: content, actions: .none).environment(\.drawsGlass, false), named: name)
     }
     let m1 = MachineFixtures.m1.id
     try shot("popover-machines-this-mac", MachineFixtures.context(selected: Machine.thisMacID))
@@ -88,7 +88,7 @@ private func renderMachineDashboards() throws {
             expanded: .constant([]), sessionsView: .constant(SessionsViewState(expanded: ["session:01a1"])),
             icons: icons, sessionActions: actions
         )
-        try renderWindow(view, size: CGSize(width: 460, height: height), named: name)
+        try renderWindow(view, size: CGSize(width: dashboardWidth, height: height), named: name)
     }
     let connected = MachineFixtures.context(selected: m1, tunnel: .connected(MachineFixtures.tunnelEnd))
     try shot("dashboard-remote", connected)
@@ -110,11 +110,11 @@ private func renderMachinePreferences() throws {
     let installed = "/Users/morgan/" + RexLocator.installPath
     let lookup = RexLookup.found(path: installed, source: .installLocation)
     let machines: [Machine] = [.thisMac(), MachineFixtures.m1, MachineFixtures.studio]
-    try renderHosted(preferences(rexCommand: "", lookup: lookup, machines: machines), named: "preferences-machines")
+    try renderHosted(preferences(rexCommand: "", lookup: lookup, machines: machines), height: preferencesHeight, named: "preferences-machines")
     let draft = MachineDraft(name: "M1", destination: "morgan@100.64.0.5", rexHost: "m1")
     try renderHosted(
         preferences(rexCommand: "", lookup: lookup, machines: [.thisMac()], form: MachineForm(target: .add, draft: draft)),
-        named: "preferences-machine-form"
+        height: preferencesHeight, named: "preferences-machine-form"
     )
     var hostile = draft
     hostile.destination = "-oProxyCommand=sh"
@@ -130,10 +130,10 @@ private func renderMachinePreferences() throws {
             rexCommand: "", lookup: lookup, machines: [.thisMac()],
             form: MachineForm(target: .add, draft: hostile, error: error)
         ),
-        named: "preferences-machine-form-error"
+        height: preferencesHeight, named: "preferences-machine-form-error"
     )
     try renderHosted(
         preferences(rexCommand: "", lookup: lookup, machines: machines, form: .editing(.thisMac())),
-        named: "preferences-this-mac-form"
+        height: preferencesHeight, named: "preferences-this-mac-form"
     )
 }

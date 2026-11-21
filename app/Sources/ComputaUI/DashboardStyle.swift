@@ -96,15 +96,17 @@ func blend(_ color: UInt32, _ base: UInt32, _ amount: Double) -> UInt32 {
 /// Sizes for the dashboard, from the reference screenshot (a 2x image, so pixels / 2, scaled to
 /// the wider window).
 enum DashboardMetrics {
-    static let defaultSize = CGSize(width: 460, height: 760)
-    static let minimumSize = CGSize(width: 400, height: 560)
-    static let sidePadding: CGFloat = 14
-    static let panelRadius: CGFloat = 16
-    static let chartHeight: CGFloat = 200
+    /// Wide enough for the toolbar's title and tabs: in a narrower window the tab picker would
+    /// not fit beside the title and the toolbar would drop it.
+    static let defaultSize = CGSize(width: 760, height: 820)
+    static let minimumSize = CGSize(width: 700, height: 600)
+    static let sidePadding: CGFloat = 16
+    static let panelRadius: CGFloat = 10
+    static let chartHeight: CGFloat = 180
+    /// The Sessions tab's hand-drawn segmented control.
     static let tabHeight: CGFloat = 30
-    static let searchHeight: CGFloat = 38
-    static let rowHeight: CGFloat = 32
-    static let iconSize: CGFloat = 20
+    static let rowHeight: CGFloat = 28
+    static let iconSize: CGFloat = 18
 }
 
 /// A capsule with a hairline edge. A stroked `Capsule` gets stray vertical ticks at its ends

@@ -37,6 +37,7 @@ final class FakeMonitorClient: MonitorClient {
         var attempts = 0
         var processScript: [FakeProcessStream] = [.sendThenHang([Fixtures.processes])]
         var processIntervals: [UInt32] = []
+        var processTrafficRequests: [Bool] = []
         var activeProcessStreams = 0
         var historyResults: [Result<HistorySeries, RPCError>] = [.success(Fixtures.history(count: 3))]
         var historyRequests: [HistoryRequest] = []
@@ -61,6 +62,8 @@ final class FakeMonitorClient: MonitorClient {
     var requestedIntervals: [UInt32] { state.withLock { $0.requestedIntervals } }
     /// One entry per `watchProcesses` call.
     var processIntervals: [UInt32] { state.withLock { $0.processIntervals } }
+    /// One entry per `watchProcesses` call: whether it asked for traffic.
+    var processTrafficRequests: [Bool] { state.withLock { $0.processTrafficRequests } }
     /// Process streams running right now.
     var activeProcessStreams: Int { state.withLock { $0.activeProcessStreams } }
     var historyRequests: [HistoryRequest] { state.withLock { $0.historyRequests } }
@@ -120,10 +123,12 @@ final class FakeMonitorClient: MonitorClient {
 
     func watchProcesses(
         intervalMilliseconds: UInt32,
+        includeNetwork: Bool,
         onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
     ) async throws {
         let step = state.withLock { state in
             state.processIntervals.append(intervalMilliseconds)
+            state.processTrafficRequests.append(includeNetwork)
             state.activeProcessStreams += 1
             return state.processScript.count > 1 ? state.processScript.removeFirst() : state.processScript[0]
         }

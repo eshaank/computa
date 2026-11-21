@@ -21,21 +21,19 @@ struct HistoryChartView: View {
                 if !model.bars.isEmpty { pills(layout) }
                 if model.bars.isEmpty, let message {
                     Text(message)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.dimText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(OutlinedCapsule(fill: Theme.panel))
                         .frame(width: proxy.size.width, height: proxy.size.height)
                 }
             }
         }
-        .background(Theme.panel)
+        .background(Theme.panel.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(.separator, lineWidth: 0.5)
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(tab.title) history chart")
@@ -156,7 +154,7 @@ struct GuidePill: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+            .font(.chartAxis)
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)

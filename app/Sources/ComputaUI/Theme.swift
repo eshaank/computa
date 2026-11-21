@@ -54,20 +54,20 @@ extension Color {
 
 /// Sizes taken from the reference popover (a 2x screenshot, so pixels / 2).
 public enum Metrics {
-    public static let popoverWidth: CGFloat = 248
-    public static let panelCornerRadius: CGFloat = 16
+    public static let popoverWidth: CGFloat = 264
+    public static let panelCornerRadius: CGFloat = 18
     public static let sidePadding: CGFloat = 16
     public static let ringDiameter: CGFloat = 60
     public static let ringLineWidth: CGFloat = 4.5
-    public static let rowHeight: CGFloat = 32
-    public static let capsuleHeight: CGFloat = 44
+    public static let rowHeight: CGFloat = 28
+    /// Space between the popover's glass panel and its buttons.
     public static let gapToCapsule: CGFloat = 10
 }
 
+/// Text inside drawings, where a fixed size is part of the drawing. Everything else uses the
+/// semantic text styles (`.body`, `.callout`, `.caption`…).
 extension Font {
-    static let rowLabel = Font.system(size: 13, weight: .medium)
-    static let rowValue = Font.system(size: 12, weight: .regular).monospacedDigit()
     static let ringLabel = Font.system(size: 8.5, weight: .semibold)
-    static let ringValue = Font.system(size: 12, weight: .semibold).monospacedDigit()
-    static let ringDetail = Font.system(size: 9, weight: .regular).monospacedDigit()
+    /// A chart guide's value.
+    static let chartAxis = Font.system(size: 10, weight: .medium).monospacedDigit()
 }

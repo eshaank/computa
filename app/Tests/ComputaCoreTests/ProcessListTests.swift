@@ -28,8 +28,7 @@ import Testing
         #expect(ProcessList.sorted([swapped, inRam], by: .memory).map(\.id) == ["r", "s"])
         #expect(swapped.residentBytes == 1_000_000_000)
         #expect(ProcessList.value(swapped, .memory) == 1_000_000_000)
-        #expect(ProcessList.totalText(footprint: swapped.memoryBytes, .memory) == Format.memory(30_000_000_000))
-        #expect(ProcessList.totalText(footprint: swapped.memoryBytes, .cpu) == nil)
+        #expect(MemoryFigures(swapped, residentReported: true).footprint == Format.memory(30_000_000_000))
         #expect(ProcessList.footprintValueText(swapped.processes[0], .memory) == Format.memory(30_000_000_000))
     }
 
@@ -48,7 +47,8 @@ import Testing
     }
 
     @Test func sortsEachGroupsProcessesTheSameWay() {
-        let group = Self.group("g", "G", cpu: 0, memory: 0, [
+        // The group helper gives its first process the group's memory, so it is 300 here too.
+        let group = Self.group("g", "G", cpu: 0, memory: 300, [
             Self.process(1, "small", cpu: 1, memory: 300),
             Self.process(2, "big", cpu: 9, memory: 100),
             Self.process(3, "mid", cpu: 4, memory: 200),

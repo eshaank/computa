@@ -47,7 +47,7 @@ func render(_ view: some View, named name: String) throws {
 func popover(
     _ state: ConnectionState, sample: SystemSample? = Fixtures.sample, host: HostInfo? = Fixtures.host,
     sleepOn: Bool = false, sleepError: String? = nil, claude: String? = nil
-) -> PopoverView {
+) -> some View {
     PopoverView(
         content: PopoverContent(
             state: state, sample: sample, host: host, endpoint: .local,
@@ -55,6 +55,8 @@ func popover(
         ),
         actions: .none
     )
+    // Liquid Glass renders blank offscreen; plain fills stand in for it.
+    .environment(\.drawsGlass, false)
 }
 
 @MainActor
@@ -67,16 +69,16 @@ func renderAll() throws {
         kind: .unsupported, summary: "computad at 127.0.0.1:7300 does not offer this call yet. Update the daemon.",
         detail: "unimplemented"
     )
-    try render(popover(.connected), named: "popover-connected-sleep-off")
-    try render(popover(.connected, sleepOn: true), named: "popover-connected-sleep-on")
-    try render(
+    try renderHosted(popover(.connected), named: "popover-connected-sleep-off")
+    try renderHosted(popover(.connected, sleepOn: true), named: "popover-connected-sleep-on")
+    try renderHosted(
         popover(.connected, claude: ClaudeUsage.popoverText(Fixtures.sessions)), named: "popover-claude-row"
     )
-    try render(popover(.connected, sample: Fixtures.desktopUnderPressure), named: "popover-desktop-pressure")
-    try render(popover(.connecting, sample: nil, host: nil), named: "popover-connecting")
-    try render(popover(.daemonNotRunning(notRunning)), named: "popover-daemon-not-running")
-    try render(popover(.daemonNotRunning(unsupported), sleepOn: true), named: "popover-daemon-unsupported-sleep-on")
-    try render(
+    try renderHosted(popover(.connected, sample: Fixtures.desktopUnderPressure), named: "popover-desktop-pressure")
+    try renderHosted(popover(.connecting, sample: nil, host: nil), named: "popover-connecting")
+    try renderHosted(popover(.daemonNotRunning(notRunning)), named: "popover-daemon-not-running")
+    try renderHosted(popover(.daemonNotRunning(unsupported), sleepOn: true), named: "popover-daemon-unsupported-sleep-on")
+    try renderHosted(
         popover(.connected, sleepError: "Could not keep this Mac awake: IOPMAssertionCreateWithName failed (0xe00002c2)"),
         named: "popover-sleep-error"
     )

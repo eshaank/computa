@@ -41,26 +41,20 @@ public struct MachineForm: Sendable, Equatable {
     }
 }
 
-/// The fields of the add/edit form, with Cancel and Save.
+/// The add/edit form as a section of the Preferences form: labelled fields, the hint or the
+/// last error, and Cancel and Save.
 struct MachineFormView: View {
     @Binding var form: MachineForm
     let onCancel: () -> Void
     let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(form.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.text)
+        Section {
             if form.target == .thisMac {
                 field("Daemon address", text: $form.address, prompt: DaemonEndpoint.local.description)
             } else {
                 remoteFields
             }
-            Text(form.error ?? hint)
-                .font(.system(size: 11))
-                .foregroundStyle(form.error == nil ? Theme.dimText : Theme.warning)
-                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel)
@@ -68,20 +62,22 @@ struct MachineFormView: View {
                 Button("Save", action: onSave)
                     .keyboardShortcut(.defaultAction)
             }
+        } header: {
+            Text(form.title)
+        } footer: {
+            Text(form.error ?? hint)
+                .foregroundStyle(form.error == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.warning))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.panel))
     }
 
     @ViewBuilder
     private var remoteFields: some View {
         field("Name", text: $form.draft.name, prompt: "M1")
         field("SSH destination", text: $form.draft.destination, prompt: "morgan@100.64.0.5")
-        HStack(spacing: 10) {
-            field("SSH port", text: $form.draft.sshPort, prompt: "22")
-            field("Daemon port", text: $form.draft.daemonPort, prompt: String(RemoteMachine.defaultDaemonPort))
-        }
-        field("Rex host label (optional)", text: $form.draft.rexHost, prompt: "m1")
+        field("SSH port", text: $form.draft.sshPort, prompt: "22")
+        field("Daemon port", text: $form.draft.daemonPort, prompt: String(RemoteMachine.defaultDaemonPort))
+        field("Rex host label", text: $form.draft.rexHost, prompt: "m1 (optional)")
     }
 
     private var hint: String {
@@ -95,14 +91,7 @@ struct MachineFormView: View {
     }
 
     private func field(_ label: String, text: Binding<String>, prompt: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
-            TextField(prompt, text: text)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 13).monospaced())
-                .onSubmit(onSave)
-        }
+        TextField(label, text: text, prompt: Text(prompt))
+            .onSubmit(onSave)
     }
 }

@@ -25,7 +25,7 @@ func renderSessionTabs(icons: any AppIconProviding) throws {
             expanded: .constant([]), sessionsView: .constant(SessionsViewState(metric: metric, expanded: expanded)),
             icons: icons, sessionActions: actions
         )
-        try renderWindow(view, size: CGSize(width: 460, height: height), named: name)
+        try renderWindow(view, size: CGSize(width: dashboardWidth, height: height), named: name)
     }
     try shot("dashboard-sessions-mem", height: 900)
     try shot("dashboard-sessions-cpu", metric: .cpu, height: 900)

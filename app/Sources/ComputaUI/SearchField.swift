@@ -1,33 +1,40 @@
+import AppKit
 import SwiftUI
 
-/// The "Search process" field in its own capsule, as in the reference.
-struct SearchField: View {
+/// The native macOS search field (`NSSearchField`), with its magnifying glass and clear button,
+/// bound to `text`.
+struct SearchField: NSViewRepresentable {
     @Binding var text: String
-    var prompt = "Search process"
+    var prompt = "Search processes"
 
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.dimText)
-            TextField("", text: $text, prompt: Text(prompt).foregroundStyle(Theme.dimText))
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.text)
-                .focusEffectDisabled()
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Theme.dimText)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = prompt
+        field.sendsSearchStringImmediately = true
+        field.delegate = context.coordinator
+        field.setAccessibilityLabel(prompt)
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        context.coordinator.text = $text
+        if field.stringValue != text { field.stringValue = text }
+        field.placeholderString = prompt
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    @MainActor
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) {
+            self.text = text
         }
-        .padding(.horizontal, 14)
-        .frame(height: DashboardMetrics.searchHeight)
-        .background(OutlinedCapsule(fill: Theme.panel))
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSSearchField else { return }
+            text.wrappedValue = field.stringValue
+        }
     }
 }

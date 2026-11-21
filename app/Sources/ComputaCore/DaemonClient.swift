@@ -26,10 +26,15 @@ public protocol MonitorClient: Sendable {
     /// Streams the grouped process list, calling `onSnapshot` for each snapshot. Ends like
     /// `watchSystem`.
     ///
-    /// - Parameter intervalMilliseconds: Time between snapshots. Zero means 2000.
+    /// - Parameters:
+    ///   - intervalMilliseconds: Time between snapshots. Zero means 2000.
+    ///   - includeNetwork: Also measure each process's traffic. It costs the daemon work, so
+    ///     ask only while the rates are shown. A daemon too old to measure ignores it and sends
+    ///     no network status.
     /// - Throws: The error that ended the stream, if it did not end normally.
     func watchProcesses(
         intervalMilliseconds: UInt32,
+        includeNetwork: Bool,
         onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
     ) async throws
 
@@ -101,9 +106,13 @@ public struct DaemonClient: MonitorClient {
     ///   stream fails.
     public func watchProcesses(
         intervalMilliseconds: UInt32,
+        includeNetwork: Bool,
         onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
     ) async throws {
-        let request = Computa_V1_WatchProcessesRequest.with { $0.intervalMs = intervalMilliseconds }
+        let request = Computa_V1_WatchProcessesRequest.with {
+            $0.intervalMs = intervalMilliseconds
+            $0.includeNetwork = includeNetwork
+        }
         try await withMonitor { monitor in
             try await monitor.watchProcesses(request) { response in
                 for try await message in response.messages {

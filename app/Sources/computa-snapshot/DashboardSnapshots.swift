@@ -17,18 +17,27 @@ func renderDashboards() throws {
     )
     func shot(
         _ name: String, _ tab: DashboardTab, content: DashboardContent = dashboardContent(), query: String = "",
-        expanded: Set<String> = [], height: CGFloat = 760
+        expanded: Set<String> = [], height: CGFloat = 760, width: CGFloat = dashboardWidth
     ) throws {
         let view = DashboardView(
             content: content, tab: .constant(tab), range: .constant(.fifteenMinutes), query: .constant(query),
             expanded: .constant(expanded), sessionsView: .constant(SessionsViewState()), icons: icons
         )
-        try renderWindow(view, size: CGSize(width: 460, height: height), named: name)
+        try renderWindow(view, size: CGSize(width: width, height: height), named: name)
     }
     try shot("dashboard-cpu", .cpu, expanded: ["pid:8812"])
     try shot("dashboard-mem", .memory, expanded: ["/Applications/Spotify.app"])
     try shot("dashboard-mem-full", .memory, expanded: ["/Applications/Spotify.app"], height: 1060)
-    try shot("dashboard-net", .network)
+    try shot(
+        "dashboard-mem-minimum-width", .memory, expanded: ["/Applications/Spotify.app"],
+        height: minimumDashboardSize.height, width: minimumDashboardSize.width
+    )
+    try shot("dashboard-net", .network, expanded: ["/Applications/Spotify.app"])
+    try renderTrafficStates { name, content in try shot(name, .network, content: content) }
+    try shot(
+        "dashboard-mem-old-daemon", .memory,
+        content: dashboardContent(processes: withoutResidentSizes(Fixtures.processes)), height: 700
+    )
     try shot("dashboard-disk", .disk)
     try shot("dashboard-search", .memory, query: "helper", expanded: ["/Applications/1Password.app"])
     try shot("dashboard-connecting", .cpu, content: dashboardContent(state: .connecting))
@@ -45,14 +54,7 @@ func renderDashboards() throws {
         "dashboard-history-need-update", .network,
         content: dashboardContent(history: nil, historyProblem: unsupported)
     )
-    try renderWindow(
-        DashboardView(
-            content: dashboardContent(), tab: .constant(.cpu), range: .constant(.oneHour), query: .constant(""),
-            expanded: .constant(["/Applications/Google Chrome.app"]), sessionsView: .constant(SessionsViewState()),
-            icons: icons
-        ),
-        size: CGSize(width: 720, height: 760), named: "dashboard-wide"
-    )
+    try shot("dashboard-wide", .cpu, expanded: ["/Applications/Google Chrome.app"], width: 960)
     try renderSessionTabs(icons: icons)
 }
 
@@ -60,29 +62,80 @@ func renderDashboards() throws {
 func dashboardContent(
     state: ConnectionState = .connected, history: HistorySeries? = Fixtures.history(),
     historyProblem: DaemonProblem? = nil, processState: ConnectionState = .connected,
-    sessionsState: ConnectionState = .connected, sessions: SessionsSnapshot = Fixtures.sessions
+    sessionsState: ConnectionState = .connected, sessions: SessionsSnapshot = Fixtures.sessions,
+    processes: ProcessSnapshot = Fixtures.processes, sample: SystemSample = Fixtures.dashboardSample
 ) -> DashboardContent {
     DashboardContent(
-        state: state, sample: Fixtures.dashboardSample, host: Fixtures.host, endpoint: .local,
+        state: state, sample: sample, host: Fixtures.host, endpoint: .local,
         history: history, historyProblem: historyProblem,
-        processState: processState, processes: Fixtures.processes,
+        processState: processState, processes: processes,
         sessionsState: sessionsState, sessions: sessions
     )
 }
 
-/// Renders a window-sized view through an offscreen `NSHostingView` at the screen's scale, and
-/// converts the result to sRGB so the colours in the PNG are the theme's.
+/// The dashboard's default width.
+let dashboardWidth: CGFloat = 760
+
+/// The dashboard window's minimum width (`DashboardMetrics.minimumSize` in ComputaUI).
+let minimumDashboardSize = CGSize(width: 700, height: 700)
+
+/// The Net tab's app list before its first rates, with a daemon problem, and from a daemon
+/// too old to measure traffic.
+@MainActor
+private func renderTrafficStates(_ shot: (String, DashboardContent) throws -> Void) throws {
+    func with(_ network: ProcessNetworkStatus?) -> DashboardContent {
+        var processes = Fixtures.processes
+        processes.network = network
+        return dashboardContent(processes: processes)
+    }
+    try shot("dashboard-net-measuring", with(ProcessNetworkStatus(available: false)))
+    try shot("dashboard-net-problem", with(ProcessNetworkStatus(available: false, problem: "nettop failed: exit status 1")))
+    try shot("dashboard-net-needs-update", with(nil))
+}
+
+/// A snapshot as a daemon older than resident sizes sends it: every resident size 0.
+func withoutResidentSizes(_ snapshot: ProcessSnapshot) -> ProcessSnapshot {
+    var snapshot = snapshot
+    for g in snapshot.groups.indices {
+        for p in snapshot.groups[g].processes.indices { snapshot.groups[g].processes[p].residentBytes = 0 }
+    }
+    return snapshot
+}
+
+/// Renders a window-sized view in a real, never-shown `NSWindow`, so its toolbar and title are
+/// drawn too, at the screen's scale, and converts the result to sRGB so the colours in the PNG
+/// are the theme's. The image is the whole window frame, title bar included.
 @MainActor
 func renderWindow(_ view: some View, size: CGSize, named name: String) throws {
     _ = NSApplication.shared
-    let host = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
-    host.appearance = NSAppearance(named: .darkAqua)
-    host.frame = CGRect(origin: .zero, size: size)
-    host.layoutSubtreeIfNeeded()
-    guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
-        throw SnapshotError(description: "NSHostingView gave no bitmap for \(name)")
+    let controller = NSHostingController(rootView: view.frame(width: size.width, height: size.height))
+    controller.sceneBridgingOptions = [.toolbars, .title]
+    let window = NSWindow(
+        contentRect: CGRect(origin: .zero, size: size),
+        styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false
+    )
+    window.appearance = NSAppearance(named: .darkAqua)
+    window.toolbarStyle = .unified
+    window.contentViewController = controller
+    window.setContentSize(size)
+    // Lets SwiftUI install the toolbar and title, which it does on a later turn of the run loop.
+    // The toolbar draws, but its selected segment comes out as a blank white pill offscreen;
+    // `dashboard-tab-picker.png` shows the same control hosted on its own.
+    RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+    guard let frame = window.contentView?.superview else {
+        throw SnapshotError(description: "the window for \(name) has no frame view")
     }
-    host.cacheDisplay(in: host.bounds, to: rep)
+    frame.layoutSubtreeIfNeeded()
+    try writePNG(of: frame, named: name)
+}
+
+/// Draws `view` into a bitmap and writes it as an sRGB PNG in the output directory.
+@MainActor
+func writePNG(of view: NSView, named name: String) throws {
+    guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+        throw SnapshotError(description: "no bitmap for \(name)")
+    }
+    view.cacheDisplay(in: view.bounds, to: rep)
     guard let srgb = rep.converting(to: .sRGB, renderingIntent: .default),
           let data = srgb.representation(using: .png, properties: [:])
     else {

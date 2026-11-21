@@ -18,6 +18,11 @@ extension Fixtures {
                 receivedBytesTotal: 910_000_000, sentBytesTotal: 140_000_000
             ),
         ]
+        // A Mac that is swapping: footprints add up to more than its RAM.
+        sample.memory.compressedBytes = 3 * gibibyte
+        sample.memory.compressorStoredBytes = 7_900_000_000
+        sample.memory.swapUsedBytes = 2_340_000_000
+        sample.memory.swapTotalBytes = 3 * gibibyte
         sample.volumes.append(
             VolumeSample(
                 name: "Backup", mountPoint: "/Volumes/Backup", totalBytes: 2_000_000_000_000,
@@ -52,12 +57,13 @@ extension Fixtures {
         return HistorySeries(points: points, stepMilliseconds: UInt32(stepSeconds * 1000))
     }
 
-    /// A dozen groups, some with many processes, plus hidden processes.
+    /// A dozen groups, some with many processes, plus hidden processes. Footprints run well
+    /// above resident sizes, as on a Mac that is swapping, and some apps have traffic.
     public static let processes: ProcessSnapshot = {
         var nextPid: Int32 = 400
         func group(
             _ name: String, bundle: String, id: String? = nil, main: String? = nil, helper: String,
-            count: Int, cpu: Double, memory: UInt64
+            count: Int, cpu: Double, memory: UInt64, down: Double = 0, up: Double = 0
         ) -> ProcessGroup {
             let processes = (0..<count).map { index -> ProcessEntry in
                 nextPid += 7
@@ -68,7 +74,8 @@ extension Fixtures {
                     pid: nextPid, parentPid: index == 0 ? 1 : nextPid - Int32(7 * index), name: processName,
                     path: bundle.isEmpty ? "/usr/bin/\(processName)" : "\(bundle)/Contents/MacOS/\(processName)",
                     cpuPercent: cpu * share * decay, memoryBytes: UInt64(Double(memory) * share * 2.5),
-                    residentBytes: UInt64(Double(memory) * share * decay)
+                    residentBytes: UInt64(Double(memory) * share * decay),
+                    receiveBytesPerSecond: down * share * decay, sendBytesPerSecond: up * share * decay
                 )
             }
             return ProcessGroup(
@@ -78,15 +85,15 @@ extension Fixtures {
             )
         }
         let groups = [
-            group("Google Chrome", bundle: "/Applications/Google Chrome.app", helper: "Google Chrome Helper (Renderer)", count: 114, cpu: 38.2, memory: 6_890_000_000),
-            group("System", bundle: "", id: ProcessGroup.systemID, main: "WindowServer", helper: "launchd", count: 24, cpu: 21.4, memory: 4_700_000_000),
-            group("Cursor", bundle: "/Applications/Cursor.app", helper: "Cursor Helper (Plugin)", count: 21, cpu: 12.9, memory: 2_290_000_000),
-            group("Spotify", bundle: "/Applications/Spotify.app", helper: "Spotify Helper", count: 6, cpu: 3.1, memory: 475_000_000),
-            group("Safari", bundle: "/Applications/Safari.app", helper: "Safari Web Content", count: 10, cpu: 2.4, memory: 223_000_000),
+            group("Google Chrome", bundle: "/Applications/Google Chrome.app", helper: "Google Chrome Helper (Renderer)", count: 114, cpu: 38.2, memory: 6_890_000_000, down: 1_840_000, up: 96_000),
+            group("System", bundle: "", id: ProcessGroup.systemID, main: "WindowServer", helper: "launchd", count: 24, cpu: 21.4, memory: 4_700_000_000, down: 212_000, up: 48_500),
+            group("Cursor", bundle: "/Applications/Cursor.app", helper: "Cursor Helper (Plugin)", count: 21, cpu: 12.9, memory: 2_290_000_000, down: 31_000, up: 12_400),
+            group("Spotify", bundle: "/Applications/Spotify.app", helper: "Spotify Helper", count: 6, cpu: 3.1, memory: 475_000_000, down: 286_000, up: 4_100),
+            group("Safari", bundle: "/Applications/Safari.app", helper: "Safari Web Content", count: 10, cpu: 2.4, memory: 223_000_000, down: 8_200, up: 1_900),
             group("OneMenu", bundle: "/Applications/OneMenu.app", helper: "OneMenu", count: 1, cpu: 0.4, memory: 141_000_000),
-            group("Docker", bundle: "/Applications/Docker.app", helper: "com.docker.backend", count: 2, cpu: 1.8, memory: 95_000_000),
+            group("Docker", bundle: "/Applications/Docker.app", helper: "com.docker.backend", count: 2, cpu: 1.8, memory: 95_000_000, down: 540, up: 610),
             group("1Password", bundle: "/Applications/1Password.app", helper: "1Password Helper", count: 6, cpu: 0.6, memory: 90_500_000),
-            group("Rex Beta", bundle: "/Applications/Rex Beta.app", helper: "rex", count: 3, cpu: 4.7, memory: 82_200_000),
+            group("Rex Beta", bundle: "/Applications/Rex Beta.app", helper: "rex", count: 3, cpu: 4.7, memory: 82_200_000, down: 3_300, up: 2_800),
             group("node", bundle: "", id: "pid:8812", helper: "node", count: 4, cpu: 9.8, memory: 79_900_000),
             group("Ghostty", bundle: "/Applications/Ghostty.app", helper: "zsh", count: 5, cpu: 1.2, memory: 66_000_000),
             group("Finder", bundle: "/System/Library/CoreServices/Finder.app", helper: "Finder", count: 1, cpu: 0.2, memory: 61_300_000),
@@ -94,7 +101,8 @@ extension Fixtures {
         return ProcessSnapshot(
             time: now, groups: groups,
             hidden: HiddenProcesses(processCount: 312),
-            processCount: groups.reduce(312) { $0 + $1.processes.count }
+            processCount: groups.reduce(312) { $0 + $1.processes.count },
+            network: ProcessNetworkStatus(available: true)
         )
     }()
 

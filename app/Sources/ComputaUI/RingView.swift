@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// One metric as a ring: an arc in the metric's colour with a soft glow, over a track, with an
-/// SF Symbol and a short label inside. The value sits below it.
+/// SF Symbol and a short label inside. The value sits below it. The ring's own text has fixed
+/// sizes because it is part of the drawing.
 public struct RingView: View {
     let symbol: String
     let label: String
@@ -25,11 +26,11 @@ public struct RingView: View {
             ring
             VStack(spacing: 1) {
                 Text(value)
-                    .font(.ringValue)
-                    .foregroundStyle(fraction == nil ? Theme.dimText : Theme.text)
+                    .font(.callout.weight(.medium).monospacedDigit())
+                    .foregroundStyle(fraction == nil ? .secondary : .primary)
                 Text(detail ?? " ")
-                    .font(.ringDetail)
-                    .foregroundStyle(Theme.dimText)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize()
             }

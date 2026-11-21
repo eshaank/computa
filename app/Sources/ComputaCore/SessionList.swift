@@ -57,6 +57,7 @@ public enum SessionList {
         switch metric {
         case .cpu: cpu.isFinite ? max(0, cpu) : 0
         case .memory: Double(memory)
+        case .network: 0  // Sessions have no traffic figures.
         }
     }
 
