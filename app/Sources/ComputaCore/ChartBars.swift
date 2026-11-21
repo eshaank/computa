@@ -50,7 +50,7 @@ public enum ChartBuilder {
         let largest = bars.map { max($0.total, $0.mirroredTotal) }.max() ?? 0
         let scale: ChartScale
         switch tab {
-        case .cpu: scale = .percent
+        case .cpu, .sessions: scale = .percent
         case .memory: scale = .memory(total: memoryTotal, largest: largest)
         case .network, .disk: scale = .rate(largest: largest, guideCount: 2)
         }
@@ -79,6 +79,8 @@ public enum ChartBuilder {
                     time: point.time, parts: [clean(point.diskReadBytesPerSecond)],
                     mirroredParts: [clean(point.diskWriteBytesPerSecond)]
                 )
+            // There is no per-session history; the Sessions tab shows no chart.
+            case .sessions: ChartBar(time: point.time, parts: [])
             }
         }
     }
@@ -111,7 +113,7 @@ extension DashboardTab {
     public var isMirroredChart: Bool {
         switch self {
         case .network, .disk: true
-        case .cpu, .memory: false
+        case .cpu, .memory, .sessions: false
         }
     }
 }

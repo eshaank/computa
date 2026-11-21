@@ -1,8 +1,18 @@
 import Foundation
 
 /// What the process list is sorted by.
-public enum ProcessMetric: Sendable, Equatable {
+public enum ProcessMetric: Sendable, Hashable, Identifiable {
     case cpu, memory
+
+    public var id: Self { self }
+
+    /// The label on a sort control.
+    public var title: String {
+        switch self {
+        case .cpu: "CPU"
+        case .memory: "Memory"
+        }
+    }
 }
 
 /// Sorting and searching the grouped process list. Pure functions, so they are testable.

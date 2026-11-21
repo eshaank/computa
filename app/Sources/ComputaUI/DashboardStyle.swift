@@ -12,7 +12,7 @@ extension DashboardTab {
         switch self {
         case .cpu: [Color(hex: blend(hex, 0x20222E, 0.45)), color]
         case .memory: [Color(hex: blend(0xB696F7, 0x20222E, 0.5)), Color(hex: blend(0xB696F7, 0x20222E, 0.22)), Theme.memoryLight]
-        case .network, .disk: [color]
+        case .network, .disk, .sessions: [color]
         }
     }
 
@@ -20,12 +20,13 @@ extension DashboardTab {
     var mirroredColor: Color { Color(hex: blend(hex, 0x20222E, 0.4)) }
 
     /// The theme colours as numbers, so shades can be mixed from them.
-    private var hex: UInt32 {
+    var hex: UInt32 {
         switch self {
         case .cpu: 0x4DF08A
         case .memory: 0xB696F7
         case .network: 0x90ECF6
         case .disk: 0xF5F28A
+        case .sessions: 0xFF7ED1
         }
     }
 }
@@ -66,6 +67,8 @@ extension DashboardTab {
                 LegendEntry(label: "Read", value: sample.map { Format.rate($0.diskReadBytesPerSecond) } ?? "–", color: color),
                 LegendEntry(label: "Write", value: sample.map { Format.rate($0.diskWriteBytesPerSecond) } ?? "–", color: mirroredColor),
             ]
+        case .sessions:
+            return []
         }
     }
 
@@ -75,7 +78,7 @@ extension DashboardTab {
         switch self {
         case .cpu: return Format.percent(sample.cpu.usagePercent)
         case .memory: return Format.memory(sample.memory.usedBytes)
-        case .network, .disk: return ""
+        case .network, .disk, .sessions: return ""
         }
     }
 }

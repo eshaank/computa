@@ -56,4 +56,17 @@ import Testing
         #expect(!store.isStreaming)
         #expect(fake.processIntervals.count == 1)
     }
+
+    @Test func closingThePopoverDuringASessionRetryWaitStopsTheStream() async throws {
+        let fake = FakeMonitorClient([.fail(unavailable)])
+        fake.scriptSessions([.fail(unavailable)])
+        let store = SessionStore(endpoint: .local, makeClient: { _ in fake })
+        store.setPopoverOpen(true)
+        try await eventually("first attempt failed") { store.state != .connecting }
+        try await Task.sleep(for: .milliseconds(50))
+        store.setPopoverOpen(false)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!store.isStreaming)
+        #expect(fake.sessionIntervals.count == 1)
+    }
 }

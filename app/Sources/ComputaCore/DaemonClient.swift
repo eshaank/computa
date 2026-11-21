@@ -31,6 +31,16 @@ public protocol MonitorClient: Sendable {
         intervalMilliseconds: UInt32,
         onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
     ) async throws
+
+    /// Streams Rex's sessions with their usage, calling `onSnapshot` for each snapshot. Ends like
+    /// `watchSystem`. Rex being unreachable is reported inside the snapshots, not as an error.
+    ///
+    /// - Parameter intervalMilliseconds: Time between snapshots. Zero means 2000.
+    /// - Throws: The error that ended the stream, if it did not end normally.
+    func watchSessions(
+        intervalMilliseconds: UInt32,
+        onSnapshot: @escaping @Sendable (SessionsSnapshot) async -> Bool
+    ) async throws
 }
 
 /// Makes a client for an address. The store makes a fresh one per connection attempt, so a
@@ -91,6 +101,22 @@ public struct DaemonClient: MonitorClient {
             try await monitor.watchProcesses(request) { response in
                 for try await message in response.messages {
                     guard await onSnapshot(ProcessSnapshot(message)) else { break }
+                }
+            }
+        }
+    }
+
+    /// - Throws: The gRPC error if the daemon cannot be reached, does not offer the call, or the
+    ///   stream fails.
+    public func watchSessions(
+        intervalMilliseconds: UInt32,
+        onSnapshot: @escaping @Sendable (SessionsSnapshot) async -> Bool
+    ) async throws {
+        let request = Computa_V1_WatchSessionsRequest.with { $0.intervalMs = intervalMilliseconds }
+        try await withMonitor { monitor in
+            try await monitor.watchSessions(request) { response in
+                for try await message in response.messages {
+                    guard await onSnapshot(SessionsSnapshot(message)) else { break }
                 }
             }
         }

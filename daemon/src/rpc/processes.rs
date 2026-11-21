@@ -31,7 +31,7 @@ pub fn round_interval(requested_ms: u32) -> u32 {
 
 /// Whether a frame taken at `at` is due for a client whose last frame was
 /// taken at `last_sent`.
-fn due(last_sent: Option<Instant>, at: Instant, interval: Duration) -> bool {
+pub(super) fn due(last_sent: Option<Instant>, at: Instant, interval: Duration) -> bool {
     last_sent.is_none_or(|last| at.saturating_duration_since(last) + EARLY_MARGIN >= interval)
 }
 

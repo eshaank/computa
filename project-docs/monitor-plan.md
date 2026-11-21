@@ -90,6 +90,28 @@ The daemon lists processes grouped by app, and the dashboard window shows them w
   themselves. The comparison above used each process's real path instead.
 - Not checked: the dashboard on screen. The hand-checks are listed in pull request 3.
 
+## Phase 4 result (2026-11-20)
+
+The daemon reports CPU and memory per Rex session, tab and pane, and the dashboard has a Sessions
+tab. The popover has a "Claude Code" row.
+
+| Check | Observed | Target | Result |
+|---|---|---|---|
+| Sessions, tabs and panes match Rex | 3 sessions, 12 panes, same ids and order | equal | equal |
+| Claude panes found | 8, each with the right working directory | — | pass |
+| Pane memory vs `top` over the same processes | 253.8 vs 254.2 MiB; 84.1 vs 84.1 MiB | within 5% | within 0.2% |
+| A closed pane disappears | 32–44 ms | under 2 s | pass |
+| A new pane appears | about 235 ms | about 2 s | pass |
+| Rex unreachable | the stream says why; other calls keep working | — | pass |
+| Daemon CPU with a sessions client, `rex` children included | 1.36% | under 2% | pass |
+
+- Daemon: 102 tests, one against a real Rex server. App: 101 tests. The app's client printed the
+  real sessions from the real daemon.
+- Claude Code started through a wrapper (for example `node cli.js`) is not recognised. Detection
+  uses the program name `claude` or a path containing `/claude/versions/`.
+- Not checked: installing the daemon as a login item (`just install-daemon` was only run with
+  `--dry-run`), recovery when the Rex server itself restarts, and the Sessions tab on screen.
+
 ## RPC: what it is here and what it is not
 
 RPC is the language the app and daemon speak. It is not how the bytes travel. For the M1, the bytes

@@ -10,7 +10,9 @@ use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
 
 use computad::processes::ProcessMonitor;
+use computad::rex::CliRex;
 use computad::sampler::Sampler;
+use computad::sessions::SessionMonitor;
 use computad::{DEFAULT_LISTEN_ADDR, rpc};
 
 /// Overrides the listen address, for example `127.0.0.1:7301`.
@@ -29,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::error!(error = format!("{error:#}"), "could not start sampling")
     })?);
     let processes = ProcessMonitor::darwin();
+    let sessions = SessionMonitor::new(Arc::new(CliRex::from_env()), processes.clone());
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("could not listen on {addr}"))?;
@@ -49,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
         tokio::time::sleep(SHUTDOWN_GRACE).await;
     };
     tokio::select! {
-        result = rpc::serve(listener, sampler, processes, signal) => result
+        result = rpc::serve(listener, sampler, processes, sessions, signal) => result
             .inspect_err(|error| tracing::error!(%error, "the gRPC server stopped with an error"))
             .context("the gRPC server failed")?,
         () = grace => tracing::info!("clients were still connected; closing their streams"),

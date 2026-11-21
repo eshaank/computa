@@ -21,6 +21,13 @@ enum FakeProcessStream: Sendable {
     case sendThenHang([ProcessSnapshot])
 }
 
+/// What one `watchSessions` call on the fake does.
+enum FakeSessionStream: Sendable {
+    case fail(RPCError)
+    /// Sends the snapshots, then waits until cancelled.
+    case sendThenHang([SessionsSnapshot])
+}
+
 /// A daemon that follows a script, one entry per connection attempt. After the script runs
 /// out, the last entry repeats.
 final class FakeMonitorClient: MonitorClient {
@@ -33,6 +40,9 @@ final class FakeMonitorClient: MonitorClient {
         var activeProcessStreams = 0
         var historyResults: [Result<HistorySeries, RPCError>] = [.success(Fixtures.history(count: 3))]
         var historyRequests: [HistoryRequest] = []
+        var sessionScript: [FakeSessionStream] = [.sendThenHang([Fixtures.sessions])]
+        var sessionIntervals: [UInt32] = []
+        var activeSessionStreams = 0
     }
 
     private let state: Mutex<State>
@@ -52,6 +62,15 @@ final class FakeMonitorClient: MonitorClient {
     /// Process streams running right now.
     var activeProcessStreams: Int { state.withLock { $0.activeProcessStreams } }
     var historyRequests: [HistoryRequest] { state.withLock { $0.historyRequests } }
+    /// One entry per `watchSessions` call.
+    var sessionIntervals: [UInt32] { state.withLock { $0.sessionIntervals } }
+    /// Session streams running right now.
+    var activeSessionStreams: Int { state.withLock { $0.activeSessionStreams } }
+
+    /// Replaces the sessions script from the next call on; the last entry repeats.
+    func scriptSessions(_ script: [FakeSessionStream]) {
+        state.withLock { $0.sessionScript = script }
+    }
 
     /// Replaces the process script from the next call on; the last entry repeats.
     func scriptProcesses(_ script: [FakeProcessStream]) {
@@ -89,6 +108,25 @@ final class FakeMonitorClient: MonitorClient {
             return state.processScript.count > 1 ? state.processScript.removeFirst() : state.processScript[0]
         }
         defer { state.withLock { $0.activeProcessStreams -= 1 } }
+        switch step {
+        case .fail(let error):
+            throw error
+        case .sendThenHang(let snapshots):
+            for snapshot in snapshots where await !onSnapshot(snapshot) { return }
+            try await Task.sleep(for: .seconds(3600))
+        }
+    }
+
+    func watchSessions(
+        intervalMilliseconds: UInt32,
+        onSnapshot: @escaping @Sendable (SessionsSnapshot) async -> Bool
+    ) async throws {
+        let step = state.withLock { state in
+            state.sessionIntervals.append(intervalMilliseconds)
+            state.activeSessionStreams += 1
+            return state.sessionScript.count > 1 ? state.sessionScript.removeFirst() : state.sessionScript[0]
+        }
+        defer { state.withLock { $0.activeSessionStreams -= 1 } }
         switch step {
         case .fail(let error):
             throw error

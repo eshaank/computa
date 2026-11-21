@@ -93,6 +93,8 @@ struct GroupRow: View {
 struct ProcessRow: View {
     let process: ProcessEntry
     let metric: ProcessMetric
+    /// Where the name starts: under the app's name by default.
+    var indent: CGFloat = 14 + 10 + 10 + DashboardMetrics.iconSize + 10
 
     var body: some View {
         HStack(spacing: 8) {
@@ -109,7 +111,7 @@ struct ProcessRow: View {
                 .font(.system(size: 12).monospacedDigit())
                 .foregroundStyle(Theme.text.opacity(0.78))
         }
-        .padding(.leading, 14 + 10 + 10 + DashboardMetrics.iconSize + 10)
+        .padding(.leading, indent)
         .padding(.trailing, 14)
         .frame(height: 24)
     }

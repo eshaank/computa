@@ -46,12 +46,12 @@ func render(_ view: some View, named name: String) throws {
 @MainActor
 func popover(
     _ state: ConnectionState, sample: SystemSample? = Fixtures.sample, host: HostInfo? = Fixtures.host,
-    sleepOn: Bool = false, sleepError: String? = nil
+    sleepOn: Bool = false, sleepError: String? = nil, claude: String? = nil
 ) -> PopoverView {
     PopoverView(
         content: PopoverContent(
             state: state, sample: sample, host: host, endpoint: .local,
-            preventSleepOn: sleepOn, preventSleepError: sleepError
+            preventSleepOn: sleepOn, preventSleepError: sleepError, claudeSummary: claude
         ),
         actions: .none
     )
@@ -69,6 +69,9 @@ func renderAll() throws {
     )
     try render(popover(.connected), named: "popover-connected-sleep-off")
     try render(popover(.connected, sleepOn: true), named: "popover-connected-sleep-on")
+    try render(
+        popover(.connected, claude: ClaudeUsage.popoverText(Fixtures.sessions)), named: "popover-claude-row"
+    )
     try render(popover(.connected, sample: Fixtures.desktopUnderPressure), named: "popover-desktop-pressure")
     try render(popover(.connecting, sample: nil, host: nil), named: "popover-connecting")
     try render(popover(.daemonNotRunning(notRunning)), named: "popover-daemon-not-running")

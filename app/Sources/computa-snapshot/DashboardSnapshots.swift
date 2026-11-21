@@ -21,7 +21,7 @@ func renderDashboards() throws {
     ) throws {
         let view = DashboardView(
             content: content, tab: .constant(tab), range: .constant(.fifteenMinutes), query: .constant(query),
-            expanded: .constant(expanded), icons: icons
+            expanded: .constant(expanded), sessionsView: .constant(SessionsViewState()), icons: icons
         )
         try renderWindow(view, size: CGSize(width: 460, height: height), named: name)
     }
@@ -48,21 +48,25 @@ func renderDashboards() throws {
     try renderWindow(
         DashboardView(
             content: dashboardContent(), tab: .constant(.cpu), range: .constant(.oneHour), query: .constant(""),
-            expanded: .constant(["/Applications/Google Chrome.app"]), icons: icons
+            expanded: .constant(["/Applications/Google Chrome.app"]), sessionsView: .constant(SessionsViewState()),
+            icons: icons
         ),
         size: CGSize(width: 720, height: 760), named: "dashboard-wide"
     )
+    try renderSessionTabs(icons: icons)
 }
 
 @MainActor
 func dashboardContent(
     state: ConnectionState = .connected, history: HistorySeries? = Fixtures.history(),
-    historyProblem: DaemonProblem? = nil, processState: ConnectionState = .connected
+    historyProblem: DaemonProblem? = nil, processState: ConnectionState = .connected,
+    sessionsState: ConnectionState = .connected, sessions: SessionsSnapshot = Fixtures.sessions
 ) -> DashboardContent {
     DashboardContent(
         state: state, sample: Fixtures.dashboardSample, host: Fixtures.host, endpoint: .local,
         history: history, historyProblem: historyProblem,
-        processState: processState, processes: Fixtures.processes
+        processState: processState, processes: Fixtures.processes,
+        sessionsState: sessionsState, sessions: sessions
     )
 }
 

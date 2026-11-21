@@ -1,7 +1,7 @@
 /// The dashboard's tabs, in display order. Adding a tab means adding a case here and its look in
 /// `ComputaUI`.
 public enum DashboardTab: String, CaseIterable, Sendable, Hashable, Identifiable {
-    case cpu, memory, network, disk
+    case cpu, memory, network, disk, sessions
 
     public var id: String { rawValue }
 
@@ -12,6 +12,7 @@ public enum DashboardTab: String, CaseIterable, Sendable, Hashable, Identifiable
         case .memory: "Mem"
         case .network: "Net"
         case .disk: "Disk"
+        case .sessions: "Sessions"
         }
     }
 
@@ -21,11 +22,18 @@ public enum DashboardTab: String, CaseIterable, Sendable, Hashable, Identifiable
         switch self {
         case .cpu: .cpu
         case .memory: .memory
-        case .network, .disk: nil
+        case .network, .disk, .sessions: nil
         }
     }
 
     public var showsProcesses: Bool { processMetric != nil }
+
+    /// The Sessions tab shows Rex's sessions instead of a history chart. The sessions stream runs
+    /// while it is showing (and while the popover is open).
+    public var showsSessions: Bool { self == .sessions }
+
+    /// Whether the tab has a history chart and range picker.
+    public var showsHistory: Bool { self != .sessions }
 }
 
 /// How far back the dashboard chart reaches.

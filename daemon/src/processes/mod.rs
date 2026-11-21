@@ -14,3 +14,6 @@ mod table;
 
 pub use monitor::{FIRST_FRAME_DELAY, Frame, Pass, PassFactory, ProcessMonitor, Subscription};
 pub use table::{ProcessEntry, ProcessTable, SubtreeUsage, Usage};
+
+#[cfg(test)]
+pub(crate) use table::fixture;

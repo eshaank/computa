@@ -50,7 +50,7 @@ struct DashboardTabBar: View {
     var body: some View {
         SegmentedPicker(
             items: DashboardTab.allCases, selection: $tab, title: \.title, tint: \.color,
-            segmentWidth: 66
+            segmentWidth: 68
         )
     }
 }
