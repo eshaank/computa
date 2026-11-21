@@ -1,6 +1,7 @@
 //! computad: collects system metrics and serves them over gRPC.
 
 pub mod history;
+pub mod processes;
 pub mod rpc;
 pub mod sampler;
 

@@ -14,6 +14,12 @@ public enum Format {
         "\(wholePercent(value))%"
     }
 
+    /// A process's CPU share with one decimal, not capped at 100, because 100 is one core:
+    /// "312.5%". Negative or invalid values show as zero.
+    public static func cpuShare(_ value: Double) -> String {
+        String(format: "%.1f%%", value.isFinite ? max(0, value) : 0)
+    }
+
     /// Share of a ring to fill, 0...1, matching the whole percent shown beside it.
     public static func ringFraction(_ percentValue: Double) -> Double {
         Double(wholePercent(percentValue)) / 100

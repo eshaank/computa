@@ -100,7 +100,9 @@ struct DaemonDownSection: View {
             Text(problem.summary)
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.text.opacity(0.8))
-            Text("Computa will reconnect by itself as soon as it answers.")
+            Text(problem.kind == .unsupported
+                ? "Update computad; Computa picks it up by itself."
+                : "Computa will reconnect by itself as soon as it answers.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.dimText)
         }

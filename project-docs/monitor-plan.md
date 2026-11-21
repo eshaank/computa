@@ -67,6 +67,29 @@ The menu bar app exists: popover, Prevent Sleep, a stand-in dashboard window and
 - The popover adds a figure under each ring, which the reference does not have, so the numbers can
   be compared with the daemon's.
 
+## Phase 3 result (2026-11-20)
+
+The daemon lists processes grouped by app, and the dashboard window shows them with history charts.
+
+| Check | Daemon | Reference | Target | Result |
+|---|---|---|---|---|
+| Memory, five processes from 11 MB to 8.2 GB | for example 8246.1 MiB | `top`: 8246M | within 5% | within 0.2% |
+| CPU of a busy loop | 99.9–100.0% | CPU-time change over 5 s: 99.9% | within 10 points | 0.1 points |
+| Chrome group size | 123 | `ps`: 123 | equal | equal |
+| Every process accounted for | 628 listed + 247 unreadable = 875 | `ps`: 875 | equal | equal |
+| Daemon CPU while a client watches processes | 0.63% | — | under 2% | pass |
+| Daemon CPU with no client | 0.13% | — | about 0.1% | pass |
+
+- Daemon: 74 tests. App: 76 tests. The app's client read history and the live process list from
+  the real daemon.
+- **No memory figure for root's processes.** The plan promised an estimated "System and other
+  users" row. It always came out as zero: a process's footprint counts compressed and swapped
+  memory at full size, so your own processes alone add up to more than the machine has in use.
+  The dashboard shows how many such processes there are, and no figure.
+- The "+N matches `ps`" check in the plan under-counts Electron apps, whose helpers rename
+  themselves. The comparison above used each process's real path instead.
+- Not checked: the dashboard on screen. The hand-checks are listed in pull request 3.
+
 ## RPC: what it is here and what it is not
 
 RPC is the language the app and daemon speak. It is not how the bytes travel. For the M1, the bytes
@@ -116,9 +139,8 @@ Rex action, which is already access-controlled.
 ## Assumed unless you object
 
 1. **Daemon runs as your user, not root.** Consequence: it cannot read memory or CPU for processes
-   owned by root. The totals stay exact, because they come from the kernel. The process list will
-   show one "System and other users" row. It is an estimate: the total minus everything visible,
-   never shown below zero. The two sets of numbers do not add up exactly.
+   owned by root. The totals stay exact, because they come from the kernel. The process list
+   shows how many such processes there are, with no usage figure (see the phase 3 result).
 2. **Memory per process is physical footprint,** the number Activity Monitor shows, not RSS. RSS
    can be sent as a second field if you want it.
 3. **History:** the last hour at one sample per second, kept in memory. Nothing is written to disk.

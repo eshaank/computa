@@ -5,15 +5,15 @@ mod battery;
 mod collector;
 mod cpu;
 mod disk;
-mod ffi;
+pub(crate) mod ffi;
 mod host;
 mod iokit;
-mod log_once;
+pub(crate) mod log_once;
 mod memory;
 mod netif;
 mod network;
 mod rate;
-mod sysctl;
+pub(crate) mod sysctl;
 mod topology;
 mod volumes;
 
@@ -27,7 +27,8 @@ use tokio::sync::watch;
 
 use crate::history::{HistoryRing, downsample};
 use crate::pb::{History, Host, SystemSample};
-use collector::{Collector, history_point, unix_ms_now};
+pub use collector::unix_ms_now;
+use collector::{Collector, history_point};
 
 /// How often the daemon takes a sample.
 pub const SAMPLE_INTERVAL_MS: u32 = 1000;
