@@ -38,7 +38,7 @@ struct PopoverHost: View {
     private func clearSleepErrorLater() async {
         guard model.sleep.lastError != nil else { return }
         do {
-            try await Task.sleep(for: Self.errorDisplayTime)
+            try await pause(for: Self.errorDisplayTime)
         } catch {
             return  // A newer error replaced this one, or the popover closed.
         }

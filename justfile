@@ -53,6 +53,10 @@ test:
     cd daemon && cargo test
     cd app && swift test
 
+# Run the app's tests as a release build, the way Computa.app is built (several minutes)
+test-release:
+    cd app && swift test -c release -Xswiftc -enable-testing
+
 # Check Rust lints and formatting
 lint:
     cd daemon && cargo clippy --all-targets -- -D warnings

@@ -46,7 +46,7 @@ enum ChildProcess {
             let pid = process.processIdentifier
             Task.detached {
                 do {
-                    try await Task.sleep(for: timeout)
+                    try await pause(for: timeout)
                 } catch {
                     logger.error("rex timeout wait for pid \(pid) ended early: \(error)")
                 }

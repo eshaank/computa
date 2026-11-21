@@ -1,8 +1,10 @@
 # Computa monitor: build plan
 
-Status as of 2026-11-20: phases 0 to 6 are built. Phase 0 is on `main`; phases 1 to 6 are pull
-requests 1 to 6, each stacked on the one before. Pull request 7 is a crash fix for the phase 2
-branch. Phase 6 is a draft because it has not run against the real M1. Nobody has yet seen the app running on screen; each pull request lists what to try.
+Status as of 2026-11-20: phases 0 to 6 are built. Phases 0 and 1 are on `main`; phases 2 to 6
+are pull requests 2 to 6, each stacked on the one before. Pull request 7 was a first attempt at a
+crash fix and did not hold; the working fix is on the phase 6 branch only (see "Phase 6 result").
+Phase 6 is a draft because it has not run against the real M1. The owner has run the app on
+screen once, which is how the crash was found.
 The "result" sections below say what was checked for each phase.
 
 ## Phase 0 result (2026-11-19)
@@ -153,10 +155,15 @@ Login is off on this Mac and the M1 could not be reached, so real `ssh` was neve
   - Daemon: 130 tests. App: 170 tests.
 - The tunnel uses plain `ssh`, not `rex forward`, which the installed Rex does not have. It sits
   behind one interface, so a `rex forward` version can be added later.
-- A crash was found here: the app aborted when a wait was cancelled part-way through, for example
-  on closing the dashboard, or on opening the popover while the daemon was stopped. The pattern
-  went back to phase 2. The fix is pull request 7, which targets the phase 2 branch, and it has
-  been merged into every branch from phase 3 on. It was reproduced in tests only.
+- A crash was found when the owner first ran the app: it quit about five seconds after the
+  dashboard opened. `Task.sleep(for:)` aborts with "freed pointer was not the last allocation"
+  in a release build (Swift 6.3, macOS 27) when the wait ends; debug builds do not show it, so
+  `swift test` never caught it. Every wait now goes through `pause(for:)` in `RealSleep.swift`,
+  which uses `Task.sleep(nanoseconds:)`. `just test-release` runs the tests as a release build,
+  and a test fails if `sleep(for:` appears in the app's code again. Why that call aborts is not
+  known; a small standalone program did not reproduce it.
+- Pull request 7 changed how the stores receive their wait function. That did not fix the crash.
+  The working fix is on this branch only and has not been merged back into the earlier branches.
 
 ### What to do on the M1
 

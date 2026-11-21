@@ -106,7 +106,7 @@ final class FakeMonitorClient: MonitorClient {
             return state.icons[bundlePath] ?? .success(Data())
         }
         // Yields, so a second request made meanwhile would overlap this one.
-        try await Task.sleep(for: .milliseconds(20))
+        try await pause(for: .milliseconds(20))
         return try result.get()
     }
 
@@ -133,7 +133,7 @@ final class FakeMonitorClient: MonitorClient {
             throw error
         case .sendThenHang(let snapshots):
             for snapshot in snapshots where await !onSnapshot(snapshot) { return }
-            try await Task.sleep(for: .seconds(3600))
+            try await pause(for: .seconds(3600))
         }
     }
 
@@ -152,7 +152,7 @@ final class FakeMonitorClient: MonitorClient {
             throw error
         case .sendThenHang(let snapshots):
             for snapshot in snapshots where await !onSnapshot(snapshot) { return }
-            try await Task.sleep(for: .seconds(3600))
+            try await pause(for: .seconds(3600))
         }
     }
 
@@ -170,7 +170,7 @@ final class FakeMonitorClient: MonitorClient {
             throw error
         case .sendThenHang(let samples):
             for sample in samples where await !onSample(sample) { return }
-            try await Task.sleep(for: .seconds(3600))
+            try await pause(for: .seconds(3600))
         case .sendThenFail(let samples, let error):
             for sample in samples where await !onSample(sample) { return }
             throw error
@@ -220,7 +220,7 @@ final class ManualSleep: Sendable {
 func eventually(_ what: String, _ condition: @MainActor () -> Bool) async throws {
     for _ in 0..<2000 {
         if condition() { return }
-        try await Task.sleep(for: .milliseconds(1))
+        try await pause(for: .milliseconds(1))
     }
     struct Timeout: Error, CustomStringConvertible { let description: String }
     throw Timeout(description: "timed out waiting for \(what)")

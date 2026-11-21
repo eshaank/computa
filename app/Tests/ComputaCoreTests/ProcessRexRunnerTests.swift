@@ -87,7 +87,7 @@ import Testing
         var gone = false
         for _ in 0..<200 where !gone {
             gone = kill(pid, 0) == -1 && errno == ESRCH
-            if !gone { try await Task.sleep(for: .milliseconds(10)) }
+            if !gone { try await pause(for: .milliseconds(10)) }
         }
         #expect(gone, "stand-in pid \(pid) still exists after the timeout")
     }

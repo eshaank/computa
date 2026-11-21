@@ -26,6 +26,7 @@ Run `just` to list every recipe. The `justfile` adds `~/.cargo/bin` to `PATH` it
 | Recipe | What it does |
 |---|---|
 | `just build`, `just test`, `just lint` | Build, test and lint both programs |
+| `just test-release` | Run the app's tests as a release build, the way `Computa.app` is built |
 | `just run` | Run the daemon on `127.0.0.1:7300` |
 | `just probe [host:port] [count] [--dashboard]` | Print what a running daemon reports |
 | `just app`, `just open-app` | Build `Computa.app`, and open it in the menu bar |
@@ -65,6 +66,11 @@ swift run computa-snapshot                    # renders the views to PNG files, 
   the PNG files, and say plainly what was not seen running.
 - **Rex reference:** the `rex` skill in `.claude/skills/rex/`. Check it before using any Rex
   command, method or event.
+- **Wait with `pause(for:)`, never `Task.sleep(for:)`.** The second aborts the release app when
+  the wait ends, and a debug `swift test` does not show it. After changing anything that waits,
+  run `just test-release`.
+- **Glow is one setting:** `Glow` in `app/Sources/ComputaUI/Theme.swift`. Use `.glow(color)`,
+  not a hand-written `.shadow`.
 - **Files stay under 300 lines, functions under 50.** Split modules before they reach the limit.
 - **No swallowed errors.** Log with context (`tracing` in Rust), then return the error.
 

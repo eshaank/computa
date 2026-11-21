@@ -156,7 +156,7 @@ final class FakeTunnel: Tunneling {
         stores.monitor.start()
         #expect(controller.selected.id == m1.id)
         #expect(made.tunnels.count == 1 && made.tunnels[0].started)
-        try await Task.sleep(for: .milliseconds(50))
+        try await pause(for: .milliseconds(50))
         #expect(fake.attempts == 0, "nothing is asked before the tunnel is up")
         made.tunnels[0].emit(.connected(tunnelEnd))
         try await eventually("connected through the tunnel") { stores.monitor.sample != nil }

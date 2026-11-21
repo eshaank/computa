@@ -85,7 +85,7 @@ import Testing
         defer { tunnel.stop() }
         try await waitUntil("unreachable") { tunnel.state != .connecting }
         #expect(tunnel.state == .unreachable(MachineValidationError.badDestination(hostile.destination).description))
-        try await Task.sleep(for: .milliseconds(200))
+        try await pause(for: .milliseconds(200))
         #expect(ssh.launchCount == 0)
         #expect(!FileManager.default.fileExists(atPath: ssh.pidFile.path))
     }

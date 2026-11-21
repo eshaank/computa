@@ -56,7 +56,7 @@ func waitUntil(_ what: String, timeout: Duration = .seconds(10), _ condition: @M
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
         if condition() { return }
-        try await Task.sleep(for: .milliseconds(10))
+        try await pause(for: .milliseconds(10))
     }
     if condition() { return }
     struct Timeout: Error, CustomStringConvertible { let description: String }

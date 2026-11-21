@@ -141,7 +141,7 @@ public final class SSHTunnel: Tunneling {
         while child.isRunning, isCurrent(current) {
             if await Self.probe(port) { return child.isRunning && isCurrent(current) }
             do {
-                try await Task.sleep(for: probeInterval)
+                try await pause(for: probeInterval)
             } catch {
                 return false
             }
