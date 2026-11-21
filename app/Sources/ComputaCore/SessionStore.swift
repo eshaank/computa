@@ -24,6 +24,8 @@ public final class SessionStore {
     public private(set) var isDashboardOpen = false
     public private(set) var tab: DashboardTab = .cpu
     public private(set) var endpoint: DaemonEndpoint
+    /// True while there is no daemon to talk to (a remote machine's tunnel is not up).
+    public private(set) var isSuspended = false
 
     /// The newest snapshot, only while connected. Never a stale one.
     public var snapshot: SessionsSnapshot? { state.isConnected ? latest : nil }
@@ -80,7 +82,14 @@ public final class SessionStore {
         stopLoop()
     }
 
-    private var isWanted: Bool { isPopoverOpen || (isDashboardOpen && tab.showsSessions) }
+    /// Pauses streaming while there is no daemon to reach, dropping the snapshot.
+    public func setSuspended(_ suspended: Bool) {
+        guard suspended != isSuspended else { return }
+        isSuspended = suspended
+        update()
+    }
+
+    private var isWanted: Bool { !isSuspended && (isPopoverOpen || (isDashboardOpen && tab.showsSessions)) }
 
     private func update() {
         if isWanted, loop == nil {

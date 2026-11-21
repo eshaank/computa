@@ -5,11 +5,31 @@ import Testing
 
 @Suite struct ProcessListTests {
     static func process(_ pid: Int32, _ name: String, cpu: Double = 0, memory: UInt64 = 0) -> ProcessEntry {
-        ProcessEntry(pid: pid, parentPid: 1, name: name, path: "/x/\(name)", cpuPercent: cpu, memoryBytes: memory, residentBytes: 0)
+        ProcessEntry(pid: pid, parentPid: 1, name: name, path: "/x/\(name)", cpuPercent: cpu, memoryBytes: memory * 3, residentBytes: memory)
     }
 
+    /// `memory` is what the group has in RAM; its footprint is three times that.
     static func group(_ id: String, _ name: String, cpu: Double, memory: UInt64, _ processes: [ProcessEntry] = []) -> ProcessGroup {
-        ProcessGroup(id: id, name: name, bundlePath: "", cpuPercent: cpu, memoryBytes: memory, processes: processes)
+        var processes = processes
+        if !processes.isEmpty { processes[0].residentBytes = memory }
+        return ProcessGroup(id: id, name: name, bundlePath: "", cpuPercent: cpu, memoryBytes: memory * 3, processes: processes)
+    }
+
+    @Test func memoryMeansWhatIsInRamNotTheFootprint() {
+        // Mostly swapped out: a 30 GB footprint with 1 GB in RAM sorts below 2 GB in RAM.
+        let swapped = ProcessGroup(
+            id: "s", name: "Swapped", bundlePath: "", cpuPercent: 0, memoryBytes: 30_000_000_000,
+            processes: [ProcessEntry(pid: 1, parentPid: 0, name: "s", path: "/s", cpuPercent: 0, memoryBytes: 30_000_000_000, residentBytes: 1_000_000_000)]
+        )
+        let inRam = ProcessGroup(
+            id: "r", name: "Resident", bundlePath: "", cpuPercent: 0, memoryBytes: 2_500_000_000,
+            processes: [ProcessEntry(pid: 2, parentPid: 0, name: "r", path: "/r", cpuPercent: 0, memoryBytes: 2_500_000_000, residentBytes: 2_000_000_000)]
+        )
+        #expect(ProcessList.sorted([swapped, inRam], by: .memory).map(\.id) == ["r", "s"])
+        #expect(swapped.residentBytes == 1_000_000_000)
+        #expect(ProcessList.value(swapped, .memory) == 1_000_000_000)
+        #expect(MemoryFigures(swapped, residentReported: true).footprint == Format.memory(30_000_000_000))
+        #expect(ProcessList.footprintValueText(swapped.processes[0], .memory) == Format.memory(30_000_000_000))
     }
 
     static let groups = [
@@ -27,7 +47,8 @@ import Testing
     }
 
     @Test func sortsEachGroupsProcessesTheSameWay() {
-        let group = Self.group("g", "G", cpu: 0, memory: 0, [
+        // The group helper gives its first process the group's memory, so it is 300 here too.
+        let group = Self.group("g", "G", cpu: 0, memory: 300, [
             Self.process(1, "small", cpu: 1, memory: 300),
             Self.process(2, "big", cpu: 9, memory: 100),
             Self.process(3, "mid", cpu: 4, memory: 200),

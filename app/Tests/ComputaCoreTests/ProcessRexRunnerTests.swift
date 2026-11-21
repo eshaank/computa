@@ -78,15 +78,16 @@ import Testing
         // exec: the shell becomes `sleep`, so the recorded pid is the process that must die.
         try standIn("exec sleep 30")
         let start = ContinuousClock.now
-        await #expect(throws: RexActionError.timedOut(.milliseconds(300))) {
-            try await runner(timeout: .milliseconds(300)).run(.openProcessViewer(sessionID: "session:1"))
+        // A second, not less: under a loaded full test run the shell needs time to write its pid.
+        await #expect(throws: RexActionError.timedOut(.seconds(1))) {
+            try await runner(timeout: .seconds(1)).run(.openProcessViewer(sessionID: "session:1"))
         }
         #expect(ContinuousClock.now - start < .seconds(3))
         let pid = try #require(Int32(String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
         var gone = false
         for _ in 0..<200 where !gone {
             gone = kill(pid, 0) == -1 && errno == ESRCH
-            if !gone { try await Task.sleep(for: .milliseconds(10)) }
+            if !gone { try await pause(for: .milliseconds(10)) }
         }
         #expect(gone, "stand-in pid \(pid) still exists after the timeout")
     }

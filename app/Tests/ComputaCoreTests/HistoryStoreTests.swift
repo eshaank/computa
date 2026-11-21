@@ -15,7 +15,7 @@ import Testing
     @Test func fetchesNothingUntilOpened() async throws {
         let fake = FakeMonitorClient([.fail(unavailable)])
         let store = makeStore(fake)
-        try await Task.sleep(for: .milliseconds(20))
+        try await pause(for: .milliseconds(20))
         #expect(fake.historyRequests.isEmpty)
         #expect(store.series == nil)
         #expect(!store.isRunning)
@@ -41,7 +41,7 @@ import Testing
 
         store.setOpen(false)
         clock.releaseAll()
-        try await Task.sleep(for: .milliseconds(20))
+        try await pause(for: .milliseconds(20))
         #expect(fake.historyRequests.count == 2, "no fetch after closing")
         #expect(store.series == nil, "closing drops the history")
         #expect(!store.isRunning)

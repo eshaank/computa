@@ -46,7 +46,7 @@ enum ChildProcess {
             let pid = process.processIdentifier
             Task.detached {
                 do {
-                    try await Task.sleep(for: timeout)
+                    try await pause(for: timeout)
                 } catch {
                     logger.error("rex timeout wait for pid \(pid) ended early: \(error)")
                 }
@@ -70,8 +70,9 @@ enum ChildProcess {
     }
 }
 
-/// Resumes a continuation exactly once: the process exiting and the timeout race.
-private final class Once<Value: Sendable>: Sendable {
+/// Resumes a continuation exactly once: the process exiting and the timeout race. Also used by
+/// `TunnelChild`.
+final class Once<Value: Sendable>: Sendable {
     private struct State {
         var continuation: CheckedContinuation<Value, Never>?
         var pending: Value?

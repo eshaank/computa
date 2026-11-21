@@ -92,8 +92,8 @@ mod tests {
     #[test]
     fn local_suffix_is_removed() {
         assert_eq!(
-            display_hostname("Eshaans-MacBook-Pro.local"),
-            "Eshaans-MacBook-Pro"
+            display_hostname("Morgans-MacBook-Pro.local"),
+            "Morgans-MacBook-Pro"
         );
         assert_eq!(display_hostname("build-box"), "build-box");
     }

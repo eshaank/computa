@@ -86,6 +86,7 @@ extension MemorySample {
         swapUsedBytes = message.swapUsedBytes
         swapTotalBytes = message.swapTotalBytes
         pressure = MemoryPressure(message.pressure)
+        compressorStoredBytes = message.compressorStoredBytes
     }
 }
 

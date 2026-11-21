@@ -75,7 +75,7 @@ unsafe extern "C" {
 
 #[link(name = "SystemConfiguration", kind = "framework")]
 unsafe extern "C" {
-    /// The Bonjour name, for example "Eshaans-MacBook-Pro". A null store
+    /// The Bonjour name, for example "Morgans-MacBook-Pro". A null store
     /// opens a temporary session. Follows the create rule.
     pub fn SCDynamicStoreCopyLocalHostName(store: CFTypeRef) -> CFStringRef;
 }

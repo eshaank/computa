@@ -41,6 +41,7 @@ pub struct SubtreeUsage {
     /// Sums over the readable processes in the subtree.
     pub cpu_percent: f64,
     pub memory_bytes: u64,
+    pub resident_bytes: u64,
     /// Every process in the subtree, the root included, readable or not.
     pub process_count: u32,
     /// How many of those could not be read.
@@ -110,6 +111,7 @@ impl ProcessTable {
                 Some(u) => {
                     out.cpu_percent += u.cpu_percent;
                     out.memory_bytes += u.memory_bytes;
+                    out.resident_bytes += u.resident_bytes;
                 }
                 None => out.hidden_count += 1,
             }
@@ -188,6 +190,7 @@ mod tests {
         pids.sort_unstable();
         assert_eq!(pids, vec![200, 201, 202, 203, 204]);
         assert_eq!(s.memory_bytes, 10 + 300 + 40);
+        assert_eq!(s.resident_bytes, 2 * (10 + 300 + 40));
         assert!((s.cpu_percent - 35.0).abs() < 1e-9);
         assert_eq!((s.process_count, s.hidden_count), (5, 2));
     }

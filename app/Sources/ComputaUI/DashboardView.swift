@@ -17,12 +17,15 @@ public struct DashboardContent: Sendable, Equatable {
     public var sessionsState: ConnectionState
     /// Only kept while the sessions stream is connected.
     public var sessions: SessionsSnapshot?
+    /// The machines, the shown one and its tunnel.
+    public var machine: MachineContext
 
     public init(
         state: ConnectionState, sample: SystemSample?, host: HostInfo?, endpoint: DaemonEndpoint,
         history: HistorySeries?, historyProblem: DaemonProblem?,
         processState: ConnectionState, processes: ProcessSnapshot?,
-        sessionsState: ConnectionState = .connecting, sessions: SessionsSnapshot? = nil
+        sessionsState: ConnectionState = .connecting, sessions: SessionsSnapshot? = nil,
+        machine: MachineContext = .thisMacOnly
     ) {
         self.state = state
         self.sample = state.isConnected ? sample : nil
@@ -34,11 +37,12 @@ public struct DashboardContent: Sendable, Equatable {
         self.processes = processState.isConnected ? processes : nil
         self.sessionsState = sessionsState
         self.sessions = sessionsState.isConnected ? sessions : nil
+        self.machine = machine
     }
 }
 
-/// The dashboard window: tabs, a history chart, and the tab's list below it, laid out like the
-/// reference. The selected tab, range, search text, expanded groups and the Sessions tab's sort
+/// The dashboard window: the tabs as a segmented control in the toolbar, as in Activity
+/// Monitor, the machine in the title, a history chart, and the tab's list below it. The selected tab, range, search text, expanded groups and the Sessions tab's sort
 /// and open rows are bindings, so the app owns them and snapshots can set them.
 public struct DashboardView: View {
     let content: DashboardContent
@@ -49,11 +53,12 @@ public struct DashboardView: View {
     @Binding var sessionsView: SessionsViewState
     let icons: any AppIconProviding
     let sessionActions: SessionActions
+    let machines: MachineSwitching
 
     public init(
         content: DashboardContent, tab: Binding<DashboardTab>, range: Binding<HistoryRange>,
         query: Binding<String>, expanded: Binding<Set<String>>, sessionsView: Binding<SessionsViewState>,
-        icons: any AppIconProviding, sessionActions: SessionActions = .none
+        icons: any AppIconProviding, sessionActions: SessionActions = .none, machines: MachineSwitching = .none
     ) {
         self.content = content
         _tab = tab
@@ -63,94 +68,95 @@ public struct DashboardView: View {
         _sessionsView = sessionsView
         self.icons = icons
         self.sessionActions = sessionActions
+        self.machines = machines
     }
 
     public var body: some View {
         VStack(spacing: 12) {
-            DashboardTabBar(tab: $tab)
-                .padding(.top, 14)
-            switch content.state {
-            case .connected:
-                connectedBody
-            case .connecting:
-                ConnectingPanel(endpoint: content.endpoint)
-                Spacer(minLength: 0)
-            case .daemonNotRunning(let problem):
-                DaemonDownSection(problem: problem)
+            if let tunnel = content.machine.pendingTunnel {
+                TunnelStatusView(machine: content.machine, state: tunnel)
                     .background(DashboardPanel())
                 Spacer(minLength: 0)
+            } else {
+                stateBody
             }
         }
-        .padding(.horizontal, DashboardMetrics.sidePadding)
-        .padding(.bottom, DashboardMetrics.sidePadding)
+        .padding(DashboardMetrics.sidePadding)
         .frame(
             minWidth: DashboardMetrics.minimumSize.width, maxWidth: .infinity,
             minHeight: DashboardMetrics.minimumSize.height, maxHeight: .infinity, alignment: .top
         )
         .background(Theme.background)
+        .toolbar {
+            DashboardToolbar(tab: $tab, machine: content.machine, switching: machines)
+        }
+        .navigationTitle(windowTitle)
+        .navigationSubtitle(content.host?.chip ?? "")
         .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
+    }
+
+    /// The machine's host name, as Activity Monitor names the Mac it watches.
+    private var windowTitle: String {
+        if content.machine.pendingTunnel == nil, let host = content.host { return host.hostname }
+        return content.machine.name
+    }
+
+    /// Numbers while connected; otherwise why not.
+    @ViewBuilder
+    private var stateBody: some View {
+        switch content.state {
+        case .connected:
+            connectedBody
+        case .connecting:
+            ConnectingPanel(endpoint: content.endpoint, machine: content.machine)
+        case .daemonNotRunning(let problem):
+            DaemonDownSection(problem: problem)
+                .background(DashboardPanel())
+            Spacer(minLength: 0)
+        }
     }
 
     @ViewBuilder
     private var connectedBody: some View {
-        infoLine
         if tab.showsHistory {
             VStack(spacing: 8) {
+                ChartHeader(tab: tab, sample: content.sample, range: $range)
                 HistoryChartView(model: chartModel, tab: tab, message: chartMessage)
                     .frame(height: DashboardMetrics.chartHeight)
                 ChartLegend(entries: tab.legend(content.sample), headline: tab.headline(content.sample))
+                if tab == .memory, let memory = content.sample?.memory {
+                    MemoryLegendDetail(memory: memory)
+                }
             }
             tabBody
         } else {
             SessionsTabView(
                 state: content.sessionsState, snapshot: content.sessions, view: $sessionsView, actions: sessionActions
             )
-        }
-    }
-
-    /// The machine on the left, the range picker on the right.
-    private var infoLine: some View {
-        HStack(spacing: 8) {
-            if let host = content.host {
-                Text(host.hostname)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text(host.chip)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.dimText)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            // Hidden rather than removed on the Sessions tab, so the line keeps its height.
-            RangePicker(range: $range, tint: tab.color)
-                .opacity(tab.showsHistory ? 1 : 0)
-                .allowsHitTesting(tab.showsHistory)
-                .accessibilityHidden(!tab.showsHistory)
+            // A close confirmation belongs to the machine it was asked on; a switch drops it.
+            .id(content.machine.selectedID)
         }
     }
 
     @ViewBuilder
     private var tabBody: some View {
-        if let metric = tab.processMetric {
-            SearchField(text: $query)
-            processPanel(metric)
-        } else if let sample = content.sample {
-            if tab == .network { NetworkPanel(network: sample.network) } else { DiskPanel(sample: sample) }
+        switch tab {
+        case .network:
+            if let sample = content.sample { NetworkPanel(network: sample.network) }
+            processSection(.network)
+        case .disk:
+            if let sample = content.sample { DiskPanel(sample: sample) }
+        case .cpu, .memory, .sessions:
+            if let metric = tab.processMetric { processSection(metric) }
         }
     }
 
     @ViewBuilder
-    private func processPanel(_ metric: ProcessMetric) -> some View {
+    private func processSection(_ metric: ProcessMetric) -> some View {
+        SearchField(text: $query)
         if let snapshot = content.processes {
-            ProcessListView(
-                groups: ProcessList.visible(snapshot.groups, query: query, metric: metric),
-                metric: metric,
-                hidden: metric == .memory && query.trimmingCharacters(in: .whitespaces).isEmpty ? snapshot.hidden : nil,
-                expanded: $expanded,
-                icons: icons
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DashboardMetrics.panelRadius, style: .continuous))
+            ProcessPanel(snapshot: snapshot, metric: metric, query: query, expanded: $expanded, icons: icons)
         } else if case .daemonNotRunning(let problem) = content.processState {
             VStack {
                 DaemonDownSection(problem: problem)
@@ -158,11 +164,13 @@ public struct DashboardView: View {
             }
             .background(DashboardPanel())
         } else {
-            Text("Loading processes…")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.dimText)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(DashboardPanel())
+            ContentUnavailableView {
+                ProgressView().controlSize(.small)
+            } description: {
+                Text("Loading processes…")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(DashboardPanel())
         }
     }
 
@@ -179,52 +187,5 @@ public struct DashboardView: View {
             return problem.kind == .unsupported ? "The daemon needs an update to show history." : problem.summary
         }
         return content.history == nil ? "Loading history…" : "No history yet."
-    }
-}
-
-/// Colour keys for the chart's parts with their live values, and the tab's headline number.
-struct ChartLegend: View {
-    let entries: [LegendEntry]
-    let headline: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ForEach(entries) { entry in
-                HStack(spacing: 5) {
-                    Circle().fill(entry.color).frame(width: 7, height: 7)
-                    Text(entry.label).foregroundStyle(Theme.dimText)
-                    Text(entry.value).foregroundStyle(Theme.text.opacity(0.85))
-                }
-            }
-            Spacer(minLength: 4)
-            Text(headline)
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(Theme.text)
-        }
-        .font(.system(size: 11).monospacedDigit())
-        .lineLimit(1)
-        .padding(.horizontal, 4)
-    }
-}
-
-/// Shown below the tabs until the first sample arrives.
-struct ConnectingPanel: View {
-    let endpoint: DaemonEndpoint
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 26, weight: .light))
-                .foregroundStyle(Theme.dimText)
-            Text("Connecting…")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.text)
-            Text("Waiting for computad at \(endpoint.description).")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
-        .background(DashboardPanel())
     }
 }

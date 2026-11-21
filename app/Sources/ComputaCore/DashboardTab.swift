@@ -22,11 +22,16 @@ public enum DashboardTab: String, CaseIterable, Sendable, Hashable, Identifiable
         switch self {
         case .cpu: .cpu
         case .memory: .memory
-        case .network, .disk, .sessions: nil
+        case .network: .network
+        case .disk, .sessions: nil
         }
     }
 
     public var showsProcesses: Bool { processMetric != nil }
+
+    /// Whether the tab's process list shows network rates, which costs the daemon extra work,
+    /// so the process stream asks for them only then.
+    public var needsProcessTraffic: Bool { processMetric == .network }
 
     /// The Sessions tab shows Rex's sessions instead of a history chart. The sessions stream runs
     /// while it is showing (and while the popover is open).

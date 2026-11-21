@@ -1,60 +1,62 @@
 import ComputaCore
 import SwiftUI
 
-/// The Net tab's list: the totals, then each interface with its addresses and rates.
+/// The Net tab's interfaces: the totals, then each interface on one line with its first
+/// address and rates. All addresses are in the tooltip.
 struct NetworkPanel: View {
     let network: NetworkSample
 
     var body: some View {
-        FittingPanel {
-            VStack(spacing: 0) {
-                TotalsRow(
-                    label: "All physical interfaces",
-                    first: "↓ \(Format.rate(network.receiveBytesPerSecond))",
-                    second: "↑ \(Format.rate(network.sendBytesPerSecond))",
-                    color: Theme.network
-                )
-                ForEach(network.interfaces, id: \.name) { interface in
-                    PanelDivider()
-                    interfaceRow(interface)
-                }
-                if network.interfaces.isEmpty {
-                    PanelDivider()
-                    Text("No interface is up.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.dimText)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
+        VStack(spacing: 0) {
+            TotalsRow(
+                label: "All physical interfaces",
+                first: "↓ \(Format.rate(network.receiveBytesPerSecond))",
+                second: "↑ \(Format.rate(network.sendBytesPerSecond))",
+                color: Theme.network
+            )
+            ForEach(network.interfaces, id: \.name) { interface in
+                PanelDivider()
+                interfaceRow(interface)
             }
-            .padding(.vertical, 4)
+            if network.interfaces.isEmpty {
+                PanelDivider()
+                Text("No interface is up.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+            }
         }
+        .padding(.vertical, 2)
+        .background(DashboardPanel())
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func interfaceRow(_ interface: NetworkInterfaceSample) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(interface.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                ForEach(interface.addresses, id: \.self) { address in
-                    Text(address)
-                        .font(.system(size: 11).monospacedDigit())
-                        .foregroundStyle(Theme.dimText)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
+        HStack(spacing: 8) {
+            Text(interface.name)
+            Text(addressText(interface.addresses))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(interface.addresses.joined(separator: "\n"))
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("↓ \(Format.rate(interface.receiveBytesPerSecond))")
-                Text("↑ \(Format.rate(interface.sendBytesPerSecond))")
-                    .foregroundStyle(Theme.network.opacity(0.7))
-            }
-            .font(.system(size: 12, weight: .medium).monospacedDigit())
-            .foregroundStyle(Theme.network)
+            Text("↓ \(Format.rate(interface.receiveBytesPerSecond))")
+                .frame(minWidth: 76, alignment: .trailing)
+            Text("↑ \(Format.rate(interface.sendBytesPerSecond))")
+                .foregroundStyle(Theme.network.opacity(0.7))
+                .frame(minWidth: 76, alignment: .trailing)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .font(.callout.monospacedDigit())
+        .foregroundStyle(Theme.network)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 28)
+    }
+
+    /// The first address and how many more: "192.168.1.42 +1".
+    private func addressText(_ addresses: [String]) -> String {
+        guard let first = addresses.first else { return "" }
+        return addresses.count > 1 ? "\(first) +\(addresses.count - 1)" : first
     }
 }
 
@@ -88,17 +90,15 @@ struct VolumeRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(volume.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.text)
+                    .font(.body)
                 Text(volume.mountPoint)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.dimText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 8)
                 Text(Format.storageUsage(used: volume.usedBytes, total: volume.totalBytes))
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    .foregroundStyle(Theme.text)
+                    .font(.callout.monospacedDigit())
             }
             UsageBar(fraction: volume.usedPercent / 100, color: Theme.disk)
             HStack {
@@ -106,10 +106,10 @@ struct VolumeRow: View {
                 Spacer()
                 Text("\(Format.storage(volume.availableBytes)) available")
             }
-            .font(.system(size: 10.5).monospacedDigit())
-            .foregroundStyle(Theme.dimText)
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
     }
 }
@@ -126,7 +126,7 @@ struct UsageBar: View {
                 Capsule()
                     .fill(color)
                     .frame(width: proxy.size.width * CGFloat(min(1, max(0, fraction))))
-                    .shadow(color: color.opacity(0.5), radius: 4)
+                    .glow(color)
             }
         }
         .frame(height: 6)
@@ -143,16 +143,18 @@ struct TotalsRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(label)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.text)
+                .font(.headline)
+                .foregroundStyle(.primary)
             Spacer(minLength: 8)
             Text(first)
+                .frame(minWidth: 76, alignment: .trailing)
             Text(second).opacity(0.7)
+                .frame(minWidth: 76, alignment: .trailing)
         }
-        .font(.system(size: 12, weight: .medium).monospacedDigit())
+        .font(.callout.monospacedDigit())
         .foregroundStyle(color)
-        .padding(.horizontal, 14)
-        .frame(minHeight: 40)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 34)
     }
 }
 
@@ -179,6 +181,6 @@ struct FittingPanel<Content: View>: View {
 
 struct PanelDivider: View {
     var body: some View {
-        Rectangle().fill(Theme.divider).frame(height: 1).padding(.horizontal, 14)
+        Divider().padding(.horizontal, 12)
     }
 }

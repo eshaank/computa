@@ -102,6 +102,8 @@ fn roll_ups_add_up_and_the_unreadable_root_is_counted() {
     let (w1, w2) = (&s.windows[0], &s.windows[1]);
     let a = &w1.panes[0];
     assert_eq!(a.memory_bytes, 10 + 300 + 40);
+    // The fixture's resident size is twice its footprint.
+    assert_eq!(a.resident_bytes, 2 * (10 + 300 + 40));
     assert!((a.cpu_percent - 35.0).abs() < 1e-9);
     assert_eq!(a.process_count, 4, "login is counted though unreadable");
     let mut pids: Vec<i32> = a.processes.iter().map(|p| p.pid).collect();
@@ -115,6 +117,9 @@ fn roll_ups_add_up_and_the_unreadable_root_is_counted() {
     assert_eq!(w1.process_count, 4 + 2);
     assert_eq!(w2.memory_bytes, 65);
     assert_eq!(s.memory_bytes, w1.memory_bytes + w2.memory_bytes);
+    assert_eq!(w1.resident_bytes, 2 * (350 + 7));
+    assert_eq!(w2.resident_bytes, 2 * 65);
+    assert_eq!(s.resident_bytes, w1.resident_bytes + w2.resident_bytes);
     assert_eq!(s.process_count, w1.process_count + w2.process_count);
     let cpu: f64 = s
         .windows
@@ -131,8 +136,13 @@ fn a_pane_whose_root_exited_reports_zero() {
     let d = &snap.sessions[0].windows[1].panes[1];
     assert_eq!(d.id, "block:d");
     assert_eq!(
-        (d.memory_bytes, d.process_count, d.cpu_percent),
-        (0, 0, 0.0)
+        (
+            d.memory_bytes,
+            d.resident_bytes,
+            d.process_count,
+            d.cpu_percent
+        ),
+        (0, 0, 0, 0.0)
     );
     assert!(d.processes.is_empty());
 }

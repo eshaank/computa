@@ -1,6 +1,11 @@
 # Computa monitor: build plan
 
-Status: approved 2026-11-19 (names, port and gRPC confirmed). Phase 0 is done; phase 1 is next.
+Status as of 2026-11-21: phases 0 to 6 are built. `main` holds phases 0 and 1. Pull requests 2
+to 5 and 7 are merged, each into the branch below it, not into `main`. Pull request 6 is open
+and is where work continues: it holds the crash fix that works (pull request 7's did not) and
+the changes made after the owner first ran the app (see "After the owner first ran it").
+Phase 6 is a draft because it has not run against the real M1.
+The "result" sections below say what was checked for each phase.
 
 ## Phase 0 result (2026-11-19)
 
@@ -131,6 +136,71 @@ Lua.
   `just install-rex-actions` and `rex config reload`, the buttons show "Rex actions not installed".
 - Not checked: the buttons in the running app, and the actions as loaded by the Rex server from
   your config (they were run from a script, which uses the same code).
+
+## Phase 6 result (2026-11-20)
+
+The app can watch a daemon on another Mac. **None of it has run against the real M1.** Remote
+Login is off on this Mac and the M1 could not be reached, so real `ssh` was never run.
+
+- Built: a machine list in Preferences, a switcher in the popover and dashboard, an SSH tunnel the
+  app starts and restarts by itself, app icons fetched from the remote daemon, and Rex actions
+  sent with `rex -S <label>`.
+- Checked by machine:
+  - The real tunnel supervisor, with a stand-in for `ssh` that forwards a port to a real daemon:
+    the app's real client received the host, live samples, history and an app icon through it,
+    and switching back to This Mac stopped the forwarder.
+  - The daemon's icon call returned a correct icon for all 87 apps on this Mac.
+  - The exact `ssh` arguments, the retry delays (1, 2, 4, 8, 15 s), and a destination that could
+    be read as an ssh option being refused before anything starts.
+  - Daemon: 130 tests. App: 170 tests.
+- The tunnel uses plain `ssh`, not `rex forward`, which the installed Rex does not have. It sits
+  behind one interface, so a `rex forward` version can be added later.
+- A crash was found when the owner first ran the app: it quit about five seconds after the
+  dashboard opened. `Task.sleep(for:)` aborts with "freed pointer was not the last allocation"
+  in a release build (Swift 6.3, macOS 27) when the wait ends; debug builds do not show it, so
+  `swift test` never caught it. Every wait now goes through `pause(for:)` in `RealSleep.swift`,
+  which uses `Task.sleep(nanoseconds:)`. `just test-release` runs the tests as a release build,
+  and a test fails if `sleep(for:` appears in the app's code again. Why that call aborts is not
+  known; a small standalone program did not reproduce it.
+- Pull request 7 changed how the stores receive their wait function. That did not fix the crash.
+  The working fix is on this branch only and has not been merged back into the earlier branches.
+
+### After the owner first ran it (2026-11-20 and 21)
+
+The owner ran the app on screen and asked for changes. They are on the phase 6 branch.
+
+- **Memory.** The Mem list showed footprints, which added up to 30 GB for one app on a 24 GB
+  Mac that had 22 GB in swap. "Mem" now means memory in RAM (resident size) everywhere, with
+  "Compressed + swap" (approximate) and "Footprint" as labelled columns, the definitions in
+  tooltips and an info popover, and swap and the compressor's stored size under the chart.
+- **Net tab by app.** The daemon measures traffic per process with `nettop`, only while the Net
+  tab is showing. It counts data on Wi-Fi, Ethernet and AWDL, without packet headers and without
+  loopback, so apps add up to a little less than the chart (about 92% in a 1 GB download test).
+  Not checked with a VPN running.
+- **Native look.** Toolbar tabs like Activity Monitor, system text styles, a grouped-form
+  Preferences window, and the popover in Liquid Glass. The app now needs macOS 26.
+- **Sessions tab.** Session cards that open to a session's panes and then one pane's processes,
+  with a back button and a clickable path, replacing the nested list.
+- Glass cannot be rendered offscreen, so none of it has been seen by anyone but the owner.
+
+### What to do on the M1
+
+1. On the M1: System Settings → General → Sharing → turn on Remote Login.
+2. On this Mac: `ssh-copy-id you@<M1 NetBird address>`. Then
+   `ssh -o BatchMode=yes you@<address> true` must succeed without asking for anything. The app
+   cannot type a password.
+3. On the M1: clone this repository, install Rust and protobuf (see the end of this plan), and run
+   `just install-daemon`.
+4. In Computa on this Mac: Preferences → Add Machine. Name it, give `you@<address>` as the SSH
+   destination, and leave the daemon port at 7300. Add a Rex host label only if `rex -S <label>`
+   already works from this Mac.
+5. Pick the M1 in the popover's machine menu. Expect "Connecting…", then the M1's numbers within
+   about 2 seconds.
+6. Disconnect NetBird. Expect "unreachable" within about 45 seconds, and recovery by itself after
+   reconnecting.
+
+The two open questions from the plan are still open: whether the M1's Rex server keeps running
+without Rex.app open, and whether `rex -S` works over its NetBird address.
 
 ## RPC: what it is here and what it is not
 

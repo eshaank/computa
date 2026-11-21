@@ -1,8 +1,8 @@
 import ComputaCore
 import SwiftUI
 
-/// The "rex command" setting: a path, or empty to find `rex` automatically, and which path is in
-/// use or that none was found.
+/// The "rex command" setting as a form section: a path, or empty to find `rex` automatically,
+/// and which path is in use or that none was found.
 struct RexCommandSection: View {
     @State private var text: String
     @State private var lookup: RexLookup
@@ -19,25 +19,27 @@ struct RexCommandSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("rex command")
-                .font(.rowLabel)
-                .foregroundStyle(Theme.text)
-            HStack(spacing: 8) {
-                TextField("Find automatically", text: $text)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 13).monospaced())
-                    .onSubmit(apply)
-                Button("Save", action: apply)
+        Section {
+            LabeledContent("rex command") {
+                HStack(spacing: 8) {
+                    TextField("rex command", text: $text, prompt: Text("Find automatically"))
+                        .labelsHidden()
+                        .onSubmit(apply)
+                    Button("Save", action: apply)
+                }
             }
-            Text(lookup.summary)
-                .font(.system(size: 11))
-                .foregroundStyle(lookup.path == nil ? Theme.warning : Theme.dimText)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("In use")
+                Text(lookup.summary)
+                    .font(.callout)
+                    .foregroundStyle(lookup.path == nil ? AnyShapeStyle(Theme.warning) : AnyShapeStyle(.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        } header: {
+            Text("Rex")
+        } footer: {
             Text("Runs Computa's Rex actions. Leave empty to search PATH, then where Rex installs it.")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

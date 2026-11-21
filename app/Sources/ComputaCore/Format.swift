@@ -35,9 +35,10 @@ public enum Format {
         scaled(Double(bytes), base: 1000)
     }
 
-    /// Used and total memory sharing the total's unit: "21.0 / 36.0 GB".
-    public static func memoryUsage(used: UInt64, total: UInt64) -> String {
-        usage(used: Double(used), total: Double(total), base: 1024)
+    /// Used and total memory sharing the total's unit: "21.0 / 36.0 GB", or with
+    /// `separator: " of "` "21.0 of 36.0 GB".
+    public static func memoryUsage(used: UInt64, total: UInt64, separator: String = " / ") -> String {
+        usage(used: Double(used), total: Double(total), base: 1024, separator: separator)
     }
 
     /// Used and total storage sharing the total's unit: "811 / 995 GB".
@@ -74,10 +75,10 @@ public enum Format {
 
     private static let units = ["B", "KB", "MB", "GB", "TB", "PB"]
 
-    private static func usage(used: Double, total: Double, base: Double) -> String {
+    private static func usage(used: Double, total: Double, base: Double, separator: String = " / ") -> String {
         let (scaledTotal, unit) = unitFor(total, base: base)
         let divisor = pow(base, Double(unit))
-        return "\(number(used / divisor, unit: unit)) / \(number(scaledTotal, unit: unit)) \(units[unit])"
+        return "\(number(used / divisor, unit: unit))\(separator)\(number(scaledTotal, unit: unit)) \(units[unit])"
     }
 
     /// Below 100 one decimal is shown, from 100 none; bytes are always whole. A value that

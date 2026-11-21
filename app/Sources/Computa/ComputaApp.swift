@@ -24,20 +24,21 @@ struct ComputaApp: App {
         Window("Computa Dashboard", id: WindowID.dashboard) {
             DashboardHost(model: model)
         }
-        .defaultSize(width: 460, height: 760)
+        .defaultSize(width: 760, height: 820)
         .windowResizability(.contentMinSize)
         .defaultLaunchBehavior(.suppressed)
 
         Window("Computa Preferences", id: WindowID.preferences) {
             PreferencesView(
-                current: model.store.endpoint,
-                save: { (text) throws(DaemonEndpointError) in try model.saveAddress(text) },
+                machines: model.machines.list.machines,
+                editing: model.machineEditing,
+                storeProblem: model.machines.saveProblem,
                 rexCommand: model.rexSetting.path,
                 rexLookup: model.rexSetting.lookup(),
                 saveRexCommand: { model.saveRexCommand($0) }
             )
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .defaultLaunchBehavior(.suppressed)
     }
 }

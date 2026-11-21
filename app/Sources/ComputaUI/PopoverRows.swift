@@ -5,96 +5,72 @@ struct InfoRow: View {
     let label: String
     let value: String
     var detail: String?
-    var valueColor: Color = Theme.text
+    var valueColor: Color = .primary
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.rowLabel)
-                    .foregroundStyle(Theme.text)
+                    .font(.body)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let detail {
                     Text(detail)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.dimText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
-            .layoutPriority(1)
             Spacer(minLength: 4)
+            // The value never truncates; the label gives way first.
             Text(value)
-                .font(.rowValue)
+                .font(.callout.monospacedDigit())
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
+                .fixedSize()
         }
         .frame(minHeight: Metrics.rowHeight)
     }
 }
 
-/// A row with a label on the left and a switch on the right, as in the reference.
+/// A row with a label on the left and a native switch on the right, as in the reference.
 struct ToggleRow: View {
     let label: String
     let isOn: Bool
+    /// A dim line under the label.
+    var detail: String?
     var message: String?
     let onChange: @MainActor @Sendable (Bool) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Toggle(isOn: Binding(get: { isOn }, set: { newValue in onChange(newValue) })) {
-                Text(label)
-                    .font(.rowLabel)
-                    .foregroundStyle(Theme.text)
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.body)
+                    if let detail {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 8)
+                Toggle(label, isOn: Binding(get: { isOn }, set: { newValue in onChange(newValue) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .tint(Theme.accent)
             }
-            .toggleStyle(ThemeSwitchStyle())
             if let message {
                 Text(message)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(Theme.warning)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(minHeight: Metrics.rowHeight)
-    }
-}
-
-/// A switch drawn in the theme's colours. Drawn by hand so it looks the same in the app and in
-/// offscreen snapshots.
-struct ThemeSwitchStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            configuration.label
-            Spacer(minLength: 8)
-            ZStack(alignment: configuration.isOn ? .trailing : .leading) {
-                Capsule()
-                    .fill(configuration.isOn ? Theme.accent : Theme.track)
-                    .shadow(color: configuration.isOn ? Theme.accent.opacity(0.45) : .clear, radius: 5)
-                Capsule()
-                    .fill(Color(hex: 0xEDEBF7))
-                    .frame(width: 26, height: 19)
-                    .padding(2.5)
-                    .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
-            }
-            .frame(width: 50, height: 24)
-            .animation(.easeOut(duration: 0.15), value: configuration.isOn)
-            .contentShape(Capsule())
-            .onTapGesture { configuration.isOn.toggle() }
-            .accessibilityAddTraits(.isButton)
-        }
-    }
-}
-
-/// A plain text button that dims while pressed.
-struct ThemeButtonStyle: ButtonStyle {
-    var color: Color = Theme.text
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.rowLabel)
-            .foregroundStyle(color.opacity(configuration.isPressed ? 0.5 : 1))
-            .contentShape(Rectangle())
     }
 }
 

@@ -37,12 +37,15 @@ final class FakeMonitorClient: MonitorClient {
         var attempts = 0
         var processScript: [FakeProcessStream] = [.sendThenHang([Fixtures.processes])]
         var processIntervals: [UInt32] = []
+        var processTrafficRequests: [Bool] = []
         var activeProcessStreams = 0
         var historyResults: [Result<HistorySeries, RPCError>] = [.success(Fixtures.history(count: 3))]
         var historyRequests: [HistoryRequest] = []
         var sessionScript: [FakeSessionStream] = [.sendThenHang([Fixtures.sessions])]
         var sessionIntervals: [UInt32] = []
         var activeSessionStreams = 0
+        var icons: [String: Result<Data, RPCError>] = [:]
+        var iconRequests: [String] = []
     }
 
     private let state: Mutex<State>
@@ -59,6 +62,8 @@ final class FakeMonitorClient: MonitorClient {
     var requestedIntervals: [UInt32] { state.withLock { $0.requestedIntervals } }
     /// One entry per `watchProcesses` call.
     var processIntervals: [UInt32] { state.withLock { $0.processIntervals } }
+    /// One entry per `watchProcesses` call: whether it asked for traffic.
+    var processTrafficRequests: [Bool] { state.withLock { $0.processTrafficRequests } }
     /// Process streams running right now.
     var activeProcessStreams: Int { state.withLock { $0.activeProcessStreams } }
     var historyRequests: [HistoryRequest] { state.withLock { $0.historyRequests } }
@@ -90,6 +95,24 @@ final class FakeMonitorClient: MonitorClient {
 
     func host() async throws -> HostInfo { Fixtures.host }
 
+    /// One entry per `appIcon` call, by bundle path.
+    var iconRequests: [String] { state.withLock { $0.iconRequests } }
+
+    /// Sets what `appIcon` answers for a path; unknown paths get empty data ("no icon").
+    func scriptIcon(_ path: String, _ result: Result<Data, RPCError>) {
+        state.withLock { $0.icons[path] = result }
+    }
+
+    func appIcon(bundlePath: String) async throws -> Data {
+        let result = state.withLock { state in
+            state.iconRequests.append(bundlePath)
+            return state.icons[bundlePath] ?? .success(Data())
+        }
+        // Yields, so a second request made meanwhile would overlap this one.
+        try await pause(for: .milliseconds(20))
+        return try result.get()
+    }
+
     func history(windowSeconds: UInt32, maxPoints: UInt32) async throws -> HistorySeries {
         let result = state.withLock { state in
             state.historyRequests.append(HistoryRequest(windowSeconds: windowSeconds, maxPoints: maxPoints))
@@ -100,10 +123,12 @@ final class FakeMonitorClient: MonitorClient {
 
     func watchProcesses(
         intervalMilliseconds: UInt32,
+        includeNetwork: Bool,
         onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
     ) async throws {
         let step = state.withLock { state in
             state.processIntervals.append(intervalMilliseconds)
+            state.processTrafficRequests.append(includeNetwork)
             state.activeProcessStreams += 1
             return state.processScript.count > 1 ? state.processScript.removeFirst() : state.processScript[0]
         }
@@ -113,7 +138,7 @@ final class FakeMonitorClient: MonitorClient {
             throw error
         case .sendThenHang(let snapshots):
             for snapshot in snapshots where await !onSnapshot(snapshot) { return }
-            try await Task.sleep(for: .seconds(3600))
+            try await pause(for: .seconds(3600))
         }
     }
 
@@ -132,7 +157,7 @@ final class FakeMonitorClient: MonitorClient {
             throw error
         case .sendThenHang(let snapshots):
             for snapshot in snapshots where await !onSnapshot(snapshot) { return }
-            try await Task.sleep(for: .seconds(3600))
+            try await pause(for: .seconds(3600))
         }
     }
 
@@ -150,7 +175,7 @@ final class FakeMonitorClient: MonitorClient {
             throw error
         case .sendThenHang(let samples):
             for sample in samples where await !onSample(sample) { return }
-            try await Task.sleep(for: .seconds(3600))
+            try await pause(for: .seconds(3600))
         case .sendThenFail(let samples, let error):
             for sample in samples where await !onSample(sample) { return }
             throw error
@@ -200,7 +225,7 @@ final class ManualSleep: Sendable {
 func eventually(_ what: String, _ condition: @MainActor () -> Bool) async throws {
     for _ in 0..<2000 {
         if condition() { return }
-        try await Task.sleep(for: .milliseconds(1))
+        try await pause(for: .milliseconds(1))
     }
     struct Timeout: Error, CustomStringConvertible { let description: String }
     throw Timeout(description: "timed out waiting for \(what)")

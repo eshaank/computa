@@ -13,7 +13,7 @@ import Testing
     }
 
     /// Lets queued tasks run, so a stream that should not start has had the chance to.
-    func settle() async throws { try await Task.sleep(for: .milliseconds(20)) }
+    func settle() async throws { try await pause(for: .milliseconds(20)) }
 
     @Test func dashboardStreamsOnlyOnTheSessionsTab() async throws {
         let fake = FakeMonitorClient([.fail(unavailable)])

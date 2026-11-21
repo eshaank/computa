@@ -37,11 +37,18 @@ struct RingsSection: View {
 }
 
 /// Machine, network, battery, memory pressure and Claude Code rows, or a connecting note.
+/// With more than one machine, the machine row is the switcher and shows in every state.
 struct StatusRows: View {
     let content: PopoverContent
+    var switching: MachineSwitching = .none
 
     var body: some View {
         VStack(spacing: 0) {
+            if content.machine.showsSwitcher, content.sample == nil {
+                MachineSwitcherRow(machine: content.machine, value: nil, detail: connectingText, switching: switching)
+            } else if content.sample == nil, content.machine.isRemote {
+                InfoRow(label: "Connecting…", value: content.machine.name, detail: connectingText, valueColor: .secondary)
+            }
             if let sample = content.sample {
                 machineRow(time: sample.time)
                 InfoRow(
@@ -56,24 +63,38 @@ struct StatusRows: View {
                     InfoRow(label: "Memory Pressure", value: pressure, valueColor: Theme.warning)
                 }
                 if let claude = content.claudeSummary {
-                    InfoRow(label: "Claude Code", value: claude, valueColor: Theme.sessions)
+                    InfoRow(label: "Claude Code", value: claude, detail: content.claudeMemoryNote, valueColor: Theme.sessions)
+                        .help(PopoverContent.claudeMemoryHelp)
                 }
-            } else {
-                InfoRow(label: "Connecting…", value: content.endpoint.description, valueColor: Theme.dimText)
+            } else if !content.machine.showsSwitcher, !content.machine.isRemote {
+                InfoRow(label: "Connecting…", value: content.endpoint.description, valueColor: .secondary)
             }
         }
         .padding(.horizontal, Metrics.sidePadding)
         .padding(.vertical, 6)
     }
 
+    /// What the machine row says while there are no numbers yet.
+    private var connectingText: String {
+        if content.machine.pendingTunnel != nil, let remote = content.machine.remote {
+            return "Connecting to \(remote.destination)…"
+        }
+        return content.machine.isRemote ? "Waiting for computad…" : "Connecting to \(content.endpoint)…"
+    }
+
     @ViewBuilder
     private func machineRow(time: Date) -> some View {
-        if let host = content.host {
+        if content.machine.showsSwitcher {
+            MachineSwitcherRow(
+                machine: content.machine, value: "up \(content.host.map { Format.uptime(since: $0.bootTime, now: time) } ?? "–")",
+                detail: content.host?.chip ?? "", switching: switching
+            )
+        } else if let host = content.host {
             InfoRow(
                 label: host.hostname,
                 value: "up \(Format.uptime(since: host.bootTime, now: time))",
                 detail: host.chip,
-                valueColor: Theme.dimText
+                valueColor: .secondary
             )
         }
     }
@@ -94,20 +115,19 @@ struct DaemonDownSection: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "bolt.horizontal.circle")
-                .font(.system(size: 30, weight: .light))
+                .font(.largeTitle.weight(.light))
                 .foregroundStyle(Theme.warning)
-                .shadow(color: Theme.warning.opacity(0.6), radius: 6)
+                .glow(Theme.warning)
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.text)
+                .font(.headline)
             Text(problem.summary)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.text.opacity(0.8))
+                .font(.callout)
+                .foregroundStyle(.secondary)
             Text(problem.kind == .unsupported
                 ? "Update computad; Computa picks it up by itself."
                 : "Computa will reconnect by itself as soon as it answers.")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.dimText)
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)

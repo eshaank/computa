@@ -51,12 +51,20 @@ async fn main() -> anyhow::Result<()> {
         stopping.notified().await;
         tokio::time::sleep(SHUTDOWN_GRACE).await;
     };
-    tokio::select! {
-        result = rpc::serve(listener, sampler, processes, sessions, signal) => result
+    let served = tokio::select! {
+        result = rpc::serve(listener, sampler, processes.clone(), sessions, signal) => result
             .inspect_err(|error| tracing::error!(%error, "the gRPC server stopped with an error"))
-            .context("the gRPC server failed")?,
-        () = grace => tracing::info!("clients were still connected; closing their streams"),
-    }
+            .context("the gRPC server failed"),
+        () = grace => {
+            tracing::info!("clients were still connected; closing their streams");
+            Ok(())
+        }
+    };
+    // Streams that are still open hold the network meter; stop its nettop
+    // child now, however the server ended, rather than leave it to whichever
+    // task is dropped last.
+    processes.shutdown_network();
+    served?;
 
     tracing::info!("computad stopped");
     Ok(())

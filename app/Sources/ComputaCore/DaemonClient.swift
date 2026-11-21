@@ -1,3 +1,4 @@
+import Foundation
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
@@ -25,10 +26,15 @@ public protocol MonitorClient: Sendable {
     /// Streams the grouped process list, calling `onSnapshot` for each snapshot. Ends like
     /// `watchSystem`.
     ///
-    /// - Parameter intervalMilliseconds: Time between snapshots. Zero means 2000.
+    /// - Parameters:
+    ///   - intervalMilliseconds: Time between snapshots. Zero means 2000.
+    ///   - includeNetwork: Also measure each process's traffic. It costs the daemon work, so
+    ///     ask only while the rates are shown. A daemon too old to measure ignores it and sends
+    ///     no network status.
     /// - Throws: The error that ended the stream, if it did not end normally.
     func watchProcesses(
         intervalMilliseconds: UInt32,
+        includeNetwork: Bool,
         onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
     ) async throws
 
@@ -41,6 +47,12 @@ public protocol MonitorClient: Sendable {
         intervalMilliseconds: UInt32,
         onSnapshot: @escaping @Sendable (SessionsSnapshot) async -> Bool
     ) async throws
+
+    /// An app's icon as PNG data, at most 128 pixels on a side. Empty when the daemon has no
+    /// icon for the bundle.
+    ///
+    /// - Parameter bundlePath: A bundle on the daemon's machine, ending in ".app".
+    func appIcon(bundlePath: String) async throws -> Data
 }
 
 /// Makes a client for an address. The store makes a fresh one per connection attempt, so a
@@ -94,9 +106,13 @@ public struct DaemonClient: MonitorClient {
     ///   stream fails.
     public func watchProcesses(
         intervalMilliseconds: UInt32,
+        includeNetwork: Bool,
         onSnapshot: @escaping @Sendable (ProcessSnapshot) async -> Bool
     ) async throws {
-        let request = Computa_V1_WatchProcessesRequest.with { $0.intervalMs = intervalMilliseconds }
+        let request = Computa_V1_WatchProcessesRequest.with {
+            $0.intervalMs = intervalMilliseconds
+            $0.includeNetwork = includeNetwork
+        }
         try await withMonitor { monitor in
             try await monitor.watchProcesses(request) { response in
                 for try await message in response.messages {
@@ -120,6 +136,16 @@ public struct DaemonClient: MonitorClient {
                 }
             }
         }
+    }
+
+    /// - Throws: The gRPC error if the daemon cannot be reached, does not offer the call, or
+    ///   rejects the path.
+    public func appIcon(bundlePath: String) async throws -> Data {
+        let request = Computa_V1_GetAppIconRequest.with { $0.bundlePath = bundlePath }
+        let message = try await withMonitor { monitor in
+            try await monitor.getAppIcon(request)
+        }
+        return message.png
     }
 
     private func withMonitor<Result: Sendable>(

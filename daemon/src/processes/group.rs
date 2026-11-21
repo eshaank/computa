@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use super::table::{ProcessEntry, ProcessTable, Usage};
+use crate::nettop::NetView;
 use crate::pb::{HiddenProcesses, Process, ProcessGroup, ProcessSnapshot};
 
 /// The id of the group that holds the operating system's own processes.
@@ -122,32 +123,43 @@ pub fn process_message(entry: &ProcessEntry, usage: Usage) -> Process {
         cpu_percent: usage.cpu_percent,
         memory_bytes: usage.memory_bytes,
         resident_bytes: usage.resident_bytes,
+        rx_bytes_per_sec: 0.0,
+        tx_bytes_per_sec: 0.0,
     }
 }
 
 /// Builds the `WatchProcesses` message. Only readable processes are listed,
 /// and a group with none is left out.
-pub fn snapshot(table: &ProcessTable, unix_ms: i64) -> ProcessSnapshot {
+///
+/// With `net`, each process carries its traffic and groups add it up. A
+/// process whose usage is hidden but whose traffic `nettop` reports is
+/// listed too, with zero CPU and memory, so its traffic still counts; it
+/// stays in the hidden count, because its usage is still unreadable.
+pub fn snapshot(table: &ProcessTable, unix_ms: i64, net: Option<&NetView>) -> ProcessSnapshot {
     let mut groups: HashMap<GroupKey, ProcessGroup> = HashMap::new();
     let mut hidden_count = 0u32;
     for entry in table.entries() {
-        let Some(usage) = entry.usage else {
+        let rate = net.and_then(|n| n.rates.get(&entry.pid).copied());
+        if entry.usage.is_none() {
             hidden_count += 1;
-            continue;
+        }
+        let usage = match (entry.usage, rate) {
+            (Some(usage), _) => usage,
+            (None, Some(_)) => Usage::default(),
+            (None, None) => continue,
         };
-        let key = group_key(table, entry);
-        let group = groups.entry(key.clone()).or_insert_with(|| {
-            let (name, bundle_path) = describe(table, &key);
-            ProcessGroup {
-                id: key.id(),
-                name,
-                bundle_path,
-                ..ProcessGroup::default()
-            }
-        });
+        let group = group_for(&mut groups, table, entry);
         group.cpu_percent += usage.cpu_percent;
         group.memory_bytes = group.memory_bytes.saturating_add(usage.memory_bytes);
-        group.processes.push(process_message(entry, usage));
+        group.resident_bytes = group.resident_bytes.saturating_add(usage.resident_bytes);
+        let mut process = process_message(entry, usage);
+        if let Some(rate) = rate {
+            process.rx_bytes_per_sec = rate.rx;
+            process.tx_bytes_per_sec = rate.tx;
+            group.rx_bytes_per_sec += rate.rx;
+            group.tx_bytes_per_sec += rate.tx;
+        }
+        group.processes.push(process);
     }
     ProcessSnapshot {
         unix_ms,
@@ -156,7 +168,26 @@ pub fn snapshot(table: &ProcessTable, unix_ms: i64) -> ProcessSnapshot {
             process_count: hidden_count,
         }),
         process_count: u32::try_from(table.len()).unwrap_or(u32::MAX),
+        network: net.map(|n| n.status.clone()),
     }
+}
+
+/// The entry's group, created empty the first time.
+fn group_for<'a>(
+    groups: &'a mut HashMap<GroupKey, ProcessGroup>,
+    table: &ProcessTable,
+    entry: &ProcessEntry,
+) -> &'a mut ProcessGroup {
+    let key = group_key(table, entry);
+    groups.entry(key.clone()).or_insert_with(|| {
+        let (name, bundle_path) = describe(table, &key);
+        ProcessGroup {
+            id: key.id(),
+            name,
+            bundle_path,
+            ..ProcessGroup::default()
+        }
+    })
 }
 
 #[cfg(test)]

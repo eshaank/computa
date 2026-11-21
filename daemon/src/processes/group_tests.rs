@@ -133,7 +133,7 @@ fn parent_cycle_terminates_and_members_agree() {
 #[test]
 fn snapshot_lists_readable_processes_and_sums_groups() {
     let t = table();
-    let s = snapshot(&t, 7);
+    let s = snapshot(&t, 7, None);
     assert_eq!(s.unix_ms, 7);
     assert_eq!(s.process_count, 16);
     let hidden = s.hidden.expect("hidden");
@@ -147,6 +147,7 @@ fn snapshot_lists_readable_processes_and_sums_groups() {
     pids.sort_unstable();
     assert_eq!(pids, vec![20, 22, 23], "unreadable login is not listed");
     assert_eq!(rex.memory_bytes, 455);
+    assert_eq!(rex.resident_bytes, 2 * 455, "in-RAM size is summed too");
     assert!((rex.cpu_percent - 45.5).abs() < 1e-9);
 
     let tmux = s
@@ -161,6 +162,7 @@ fn snapshot_lists_readable_processes_and_sums_groups() {
     let system = s.groups.iter().find(|g| g.id == SYSTEM_ID).expect("system");
     assert_eq!(system.name, "System");
     assert_eq!(system.memory_bytes, 8 + 2 + 1 + 1);
+    assert_eq!(system.resident_bytes, 2 * (8 + 2 + 1 + 1));
 }
 
 #[test]
@@ -169,7 +171,7 @@ fn groups_without_readable_processes_are_left_out() {
         proc(1, 0, "/sbin/launchd", None),
         proc(60, 1, "/opt/rootonly", None),
     ]);
-    let s = snapshot(&t, 0);
+    let s = snapshot(&t, 0, None);
     assert!(s.groups.is_empty());
     assert_eq!(s.hidden.expect("hidden").process_count, 2);
 }

@@ -3,7 +3,9 @@ import Observation
 import os
 
 /// Streams the process list, only while the dashboard is open on a tab that shows it. Reading
-/// every process costs the daemon work, so the stream stops as soon as nobody looks.
+/// every process costs the daemon work, so the stream stops as soon as nobody looks, and asks
+/// for per-process traffic only while the Net tab shows. Moving to or from the Net tab restarts
+/// the stream, so a snapshot without traffic never shows there.
 ///
 /// Like `MonitorStore`, when the stream fails it waits and tries again for as long as it is
 /// wanted.
@@ -22,11 +24,15 @@ public final class ProcessStore {
     public private(set) var isDashboardOpen = false
     public private(set) var tab: DashboardTab = .cpu
     public private(set) var endpoint: DaemonEndpoint
+    /// True while there is no daemon to talk to (a remote machine's tunnel is not up).
+    public private(set) var isSuspended = false
 
     /// The newest snapshot, only while connected. Never a stale one.
     public var snapshot: ProcessSnapshot? { state.isConnected ? latest : nil }
     /// True while the stream is wanted and running.
     public var isStreaming: Bool { loop != nil }
+    /// Whether the running stream asked for per-process traffic.
+    public private(set) var isStreamingTraffic = false
 
     private var latest: ProcessSnapshot?
     @ObservationIgnored private let makeClient: MonitorClientFactory
@@ -72,11 +78,22 @@ public final class ProcessStore {
         stopLoop()
     }
 
-    private var isWanted: Bool { isDashboardOpen && tab.showsProcesses }
+    /// Pauses streaming while there is no daemon to reach, dropping the snapshot.
+    public func setSuspended(_ suspended: Bool) {
+        guard suspended != isSuspended else { return }
+        isSuspended = suspended
+        update()
+    }
+
+    private var isWanted: Bool { !isSuspended && (isDashboardOpen && tab.showsProcesses) }
 
     private func update() {
         if isWanted, loop == nil {
             logger.info("process stream starting (tab \(self.tab.rawValue, privacy: .public))")
+            restart()
+        } else if isWanted, isStreamingTraffic != tab.needsProcessTraffic {
+            logger.info("process stream restarting, traffic \(self.tab.needsProcessTraffic, privacy: .public)")
+            stopLoop()
             restart()
         } else if !isWanted, loop != nil {
             logger.info("process stream stopping")
@@ -90,6 +107,7 @@ public final class ProcessStore {
         generation += 1
         loop?.cancel()
         loop = nil
+        isStreamingTraffic = false
         latest = nil
         state = .connecting
     }
@@ -99,14 +117,16 @@ public final class ProcessStore {
         loop?.cancel()
         let current = generation
         let endpoint = endpoint
+        let traffic = tab.needsProcessTraffic
+        isStreamingTraffic = traffic
         loop = Task { [weak self] in
-            await self?.run(generation: current, endpoint: endpoint)
+            await self?.run(generation: current, endpoint: endpoint, traffic: traffic)
         }
     }
 
-    private func run(generation current: Int, endpoint: DaemonEndpoint) async {
+    private func run(generation current: Int, endpoint: DaemonEndpoint, traffic: Bool) async {
         while isCurrent(current) {
-            await stream(makeClient(endpoint), generation: current, endpoint: endpoint)
+            await stream(makeClient(endpoint), generation: current, endpoint: endpoint, traffic: traffic)
             guard isCurrent(current) else { return }
             let unsupported = if case .daemonNotRunning(let problem) = state { problem.kind == .unsupported } else { false }
             do {
@@ -119,9 +139,13 @@ public final class ProcessStore {
         }
     }
 
-    private func stream(_ client: any MonitorClient, generation current: Int, endpoint: DaemonEndpoint) async {
+    private func stream(
+        _ client: any MonitorClient, generation current: Int, endpoint: DaemonEndpoint, traffic: Bool
+    ) async {
         do {
-            try await client.watchProcesses(intervalMilliseconds: Self.intervalMilliseconds) { [weak self] snapshot in
+            try await client.watchProcesses(
+                intervalMilliseconds: Self.intervalMilliseconds, includeNetwork: traffic
+            ) { [weak self] snapshot in
                 await self?.receive(snapshot, generation: current) ?? false
             }
             guard isCurrent(current) else { return }

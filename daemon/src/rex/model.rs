@@ -150,7 +150,7 @@ mod tests {
         assert_eq!((child.pid, child.name.as_str()), (11827, "login"));
         let fg = p.foreground.expect("foreground");
         assert_eq!((fg.name.as_str(), fg.argv0.as_str()), ("2.1.328", "claude"));
-        assert_eq!(fg.cwd, "/Users/eshaan/Documents/computa");
+        assert_eq!(fg.cwd, "/Users/morgan/Documents/computa");
         assert_eq!(p.ancestors.len(), 2);
         assert_eq!(p.ancestors[0].argv0, "-zsh");
     }

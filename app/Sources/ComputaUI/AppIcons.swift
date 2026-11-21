@@ -1,6 +1,7 @@
 import AppKit
 import ComputaCore
 import SwiftUI
+import os
 
 /// What to draw for a process group.
 public enum AppIcon {
@@ -9,8 +10,8 @@ public enum AppIcon {
     case symbol(String)
 }
 
-/// Finds the icon for a process group. The local provider reads app bundles on this Mac; a
-/// remote daemon's apps will need another implementation.
+/// Finds the icon for a process group. The local provider reads app bundles on this Mac; the
+/// remote one asks another Mac's daemon.
 @MainActor
 public protocol AppIconProviding: AnyObject {
     func icon(for group: ProcessGroup) -> AppIcon
@@ -41,6 +42,43 @@ public final class LocalAppIconProvider: AppIconProviding {
         guard fileManager.fileExists(atPath: path) else { return .fallback(for: group) }
         let image = NSWorkspace.shared.icon(forFile: path)
         cache[path] = image
+        return .image(image)
+    }
+}
+
+/// Icons for a remote machine's processes, fetched with `GetAppIcon` through its tunnel and
+/// kept by `RemoteIconCache`. Shows the placeholder until an icon arrives; the cache is
+/// observable, so the list redraws when it does.
+@MainActor
+public final class RemoteAppIconProvider: AppIconProviding {
+    private let cache: RemoteIconCache
+    private let machineID: String
+    private let endpoint: @MainActor () -> DaemonEndpoint?
+    private var images: [String: NSImage] = [:]
+    private var undecodable: Set<String> = []
+    private let logger = Logger(subsystem: "app.computa.Computa", category: "icons")
+
+    /// - Parameter endpoint: Where the machine's daemon is reached now; nil while its tunnel is
+    ///   down, when nothing is asked.
+    public init(cache: RemoteIconCache, machineID: String, endpoint: @escaping @MainActor () -> DaemonEndpoint?) {
+        self.cache = cache
+        self.machineID = machineID
+        self.endpoint = endpoint
+    }
+
+    public func icon(for group: ProcessGroup) -> AppIcon {
+        let path = group.bundlePath
+        // The daemon only serves bundles ending in ".app".
+        guard path.hasSuffix(".app"), !undecodable.contains(path) else { return .fallback(for: group) }
+        if let image = images[path] { return .image(image) }
+        let key = RemoteIconCache.Key(machineID: machineID, bundlePath: path)
+        guard case .png(let data) = cache.entry(for: key, endpoint: endpoint()) else { return .fallback(for: group) }
+        guard let image = NSImage(data: data) else {
+            logger.error("icon for \(path, privacy: .public) on \(self.machineID, privacy: .public) is not an image (\(data.count) bytes)")
+            undecodable.insert(path)
+            return .fallback(for: group)
+        }
+        images[path] = image
         return .image(image)
     }
 }

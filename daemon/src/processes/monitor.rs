@@ -1,6 +1,7 @@
 //! Samples processes on a thread of its own, but only while someone is
 //! subscribed. Subscribers share one sampler, which runs at the shortest
-//! interval any of them asked for.
+//! interval any of them asked for. Network traffic is measured only while
+//! at least one subscriber asked for it.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -10,10 +11,11 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 use tokio::sync::watch;
 
-use super::group;
+use super::network::NetworkSlot;
+use super::sampling;
 use super::table::ProcessTable;
+use crate::nettop::{Launcher, MeterConfig, NoLauncher, PtyLauncher};
 use crate::pb::ProcessSnapshot;
-use crate::sampler::unix_ms_now;
 
 /// How long after the first subscriber arrives the first frame is ready: CPU
 /// percent needs two readings this far apart.
@@ -27,7 +29,10 @@ pub struct Frame {
     /// When the pass began.
     pub at: Instant,
     pub table: Arc<ProcessTable>,
+    /// Without network traffic, for subscribers that did not ask for it.
     pub snapshot: ProcessSnapshot,
+    /// With network traffic; `None` while nobody asked for it.
+    pub networked: Option<ProcessSnapshot>,
 }
 
 /// Takes one pass at the given time. A new one is made each time sampling
@@ -37,27 +42,28 @@ pub type PassFactory = Arc<dyn Fn() -> Pass + Send + Sync>;
 type Latest = Option<Arc<Frame>>;
 
 #[derive(Debug, Default)]
-struct State {
-    intervals: HashMap<u64, Duration>,
+pub(super) struct State {
+    pub(super) intervals: HashMap<u64, Duration>,
     next_id: u64,
     /// Bumped whenever sampling starts or stops; a thread from an older
     /// generation exits and may not publish.
-    generation: u64,
+    pub(super) generation: u64,
     running: bool,
 }
 
 impl State {
-    fn interval(&self) -> Option<Duration> {
+    pub(super) fn interval(&self) -> Option<Duration> {
         self.intervals.values().min().copied()
     }
 }
 
-struct Shared {
-    state: Mutex<State>,
-    wake: Condvar,
-    tx: watch::Sender<Latest>,
-    factory: PassFactory,
-    first_delay: Duration,
+pub(super) struct Shared {
+    pub(super) state: Mutex<State>,
+    pub(super) wake: Condvar,
+    pub(super) tx: watch::Sender<Latest>,
+    pub(super) factory: PassFactory,
+    pub(super) first_delay: Duration,
+    pub(super) network: NetworkSlot,
 }
 
 /// The process sampler. Cheap to clone; clones share one sampler.
@@ -75,16 +81,32 @@ impl std::fmt::Debug for ProcessMonitor {
 }
 
 impl ProcessMonitor {
-    /// Reads this machine's processes.
+    /// Reads this machine's processes, and their traffic from `nettop`.
     pub fn darwin() -> Self {
         let factory: PassFactory = Arc::new(|| {
             let mut reader = super::reader::Reader::new(super::reader::Darwin);
             Box::new(move |now| reader.read(now))
         });
-        Self::new(factory, FIRST_FRAME_DELAY)
+        let nettop = Arc::new(PtyLauncher::nettop());
+        Self::with_network(factory, FIRST_FRAME_DELAY, nettop, MeterConfig::default())
     }
 
+    /// A monitor that cannot measure network traffic.
     pub fn new(factory: PassFactory, first_delay: Duration) -> Self {
+        Self::with_network(
+            factory,
+            first_delay,
+            Arc::new(NoLauncher),
+            MeterConfig::default(),
+        )
+    }
+
+    pub fn with_network(
+        factory: PassFactory,
+        first_delay: Duration,
+        launcher: Arc<dyn Launcher>,
+        config: MeterConfig,
+    ) -> Self {
         let (tx, _) = watch::channel(None);
         Self {
             shared: Arc::new(Shared {
@@ -93,6 +115,7 @@ impl ProcessMonitor {
                 tx,
                 factory,
                 first_delay,
+                network: NetworkSlot::new(launcher, config),
             }),
         }
     }
@@ -105,6 +128,30 @@ impl ProcessMonitor {
     ///
     /// Returns an error if the sampling thread cannot be started.
     pub fn subscribe(&self, interval: Duration) -> anyhow::Result<Subscription> {
+        self.subscribe_with(interval, false)
+    }
+
+    /// Like [`Self::subscribe`]; with `network`, also measures network
+    /// traffic until this subscription and every other one that asked for
+    /// it are dropped.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sampling thread cannot be started.
+    pub fn subscribe_with(
+        &self,
+        interval: Duration,
+        network: bool,
+    ) -> anyhow::Result<Subscription> {
+        let mut subscription = self.subscribe_plain(interval)?;
+        if network {
+            self.shared.network.acquire();
+            subscription.network = true;
+        }
+        Ok(subscription)
+    }
+
+    fn subscribe_plain(&self, interval: Duration) -> anyhow::Result<Subscription> {
         let shared = &self.shared;
         let mut st = lock(&shared.state);
         let id = st.next_id;
@@ -114,7 +161,7 @@ impl ProcessMonitor {
             let thread_shared = Arc::clone(shared);
             thread::Builder::new()
                 .name("computad-processes".to_owned())
-                .spawn(move || run(&thread_shared, generation))
+                .spawn(move || sampling::run(&thread_shared, generation))
                 .context("could not start the process sampling thread")?;
             st.generation = generation;
             st.running = true;
@@ -124,6 +171,7 @@ impl ProcessMonitor {
         shared.wake.notify_all();
         Ok(Subscription {
             id,
+            network: false,
             shared: Arc::clone(shared),
             rx: shared.tx.subscribe(),
         })
@@ -136,11 +184,28 @@ impl ProcessMonitor {
     pub fn is_sampling(&self) -> bool {
         lock(&self.shared.state).running
     }
+
+    /// Whether the network meter is running.
+    pub fn is_measuring_network(&self) -> bool {
+        self.shared.network.is_running()
+    }
+
+    /// The pid of the running `nettop`, if any.
+    pub fn network_child_pid(&self) -> Option<u32> {
+        self.shared.network.child_pid()
+    }
+
+    /// Stops network measuring for good and reaps its child, for daemon
+    /// shutdown while streams may still be open.
+    pub fn shutdown_network(&self) {
+        self.shared.network.shutdown();
+    }
 }
 
 /// A claim on the process sampler. Holds it running until dropped.
 pub struct Subscription {
     id: u64,
+    network: bool,
     shared: Arc<Shared>,
     rx: watch::Receiver<Latest>,
 }
@@ -149,6 +214,7 @@ impl std::fmt::Debug for Subscription {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Subscription")
             .field("id", &self.id)
+            .field("network", &self.network)
             .finish()
     }
 }
@@ -167,6 +233,15 @@ impl Subscription {
 
 impl Drop for Subscription {
     fn drop(&mut self) {
+        self.unsubscribe();
+        if self.network {
+            self.shared.network.release();
+        }
+    }
+}
+
+impl Subscription {
+    fn unsubscribe(&self) {
         let mut st = lock(&self.shared.state);
         st.intervals.remove(&self.id);
         if st.intervals.is_empty() && st.running {
@@ -181,74 +256,11 @@ impl Drop for Subscription {
 }
 
 /// The state is valid after any panic, so a poisoned lock is logged and used.
-fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
+pub(super) fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
     state.lock().unwrap_or_else(|poisoned| {
         tracing::error!("the process sampler lock was poisoned by a panic; using it anyway");
         poisoned.into_inner()
     })
-}
-
-/// Takes a priming pass, then one pass per interval until this generation
-/// ends. If a pass runs late, the schedule restarts from it.
-fn run(shared: &Shared, generation: u64) {
-    let mut pass = (shared.factory)();
-    let mut last = Instant::now();
-    pass(last);
-    let mut first = true;
-    let mut seq = 0;
-    while wait_for_turn(shared, generation, last, first) {
-        let now = Instant::now();
-        let table = Arc::new(pass(now));
-        let snapshot = group::snapshot(&table, unix_ms_now());
-        seq += 1;
-        let frame = Arc::new(Frame {
-            seq,
-            at: now,
-            table,
-            snapshot,
-        });
-        let st = lock(&shared.state);
-        if st.generation != generation {
-            break;
-        }
-        shared.tx.send_replace(Some(frame));
-        drop(st);
-        (last, first) = (now, false);
-    }
-    tracing::debug!(generation, "process sampling thread exited");
-}
-
-/// Sleeps until the next pass is due. Returns false if this generation has
-/// ended. Wakes early when subscribers come or go, so a shorter interval
-/// takes effect at once.
-fn wait_for_turn(shared: &Shared, generation: u64, last: Instant, first: bool) -> bool {
-    let mut st = lock(&shared.state);
-    loop {
-        if st.generation != generation {
-            return false;
-        }
-        let step = match st.interval() {
-            Some(interval) if !first => interval,
-            _ => shared.first_delay,
-        };
-        let now = Instant::now();
-        let Some(wait) = (last + step)
-            .checked_duration_since(now)
-            .filter(|w| !w.is_zero())
-        else {
-            return true;
-        };
-        st = shared
-            .wake
-            .wait_timeout(st, wait)
-            .map(|(guard, _)| guard)
-            .unwrap_or_else(|poisoned| {
-                tracing::error!(
-                    "the process sampler lock was poisoned by a panic; using it anyway"
-                );
-                poisoned.into_inner().0
-            });
-    }
 }
 
 #[cfg(test)]

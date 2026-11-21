@@ -12,10 +12,12 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
 use super::{processes, sessions, watch};
+use crate::icons::{IconError, IconService};
 use crate::pb::monitor_server::{Monitor, MonitorServer};
 use crate::pb::{
-    GetHistoryRequest, GetHostRequest, History, Host, ProcessSnapshot, SessionsSnapshot,
-    SystemSample, WatchProcessesRequest, WatchSessionsRequest, WatchSystemRequest,
+    AppIcon, GetAppIconRequest, GetHistoryRequest, GetHostRequest, History, Host, ProcessSnapshot,
+    SessionsSnapshot, SystemSample, WatchProcessesRequest, WatchSessionsRequest,
+    WatchSystemRequest,
 };
 use crate::processes::ProcessMonitor;
 use crate::sampler::{SAMPLE_INTERVAL_MS, Sampler};
@@ -30,6 +32,7 @@ struct MonitorService {
     sampler: Arc<Sampler>,
     processes: ProcessMonitor,
     sessions: SessionMonitor,
+    icons: IconService,
 }
 
 #[tonic::async_trait]
@@ -67,18 +70,27 @@ impl Monitor for MonitorService {
         &self,
         request: Request<WatchProcessesRequest>,
     ) -> Result<Response<Self::WatchProcessesStream>, Status> {
-        let requested = request.into_inner().interval_ms;
+        let request = request.into_inner();
+        let (requested, network) = (request.interval_ms, request.include_network);
         let interval_ms = processes::round_interval(requested);
-        tracing::debug!(requested, interval_ms, "starting a WatchProcesses stream");
+        tracing::debug!(
+            requested,
+            interval_ms,
+            network,
+            "starting a WatchProcesses stream"
+        );
         let interval = Duration::from_millis(u64::from(interval_ms));
-        let subscription = self.processes.subscribe(interval).map_err(|error| {
-            tracing::error!(
-                error = format!("{error:#}"),
-                "could not start process sampling"
-            );
-            Status::internal("could not start process sampling")
-        })?;
-        let stream = processes::stream(subscription, interval);
+        let subscription = self
+            .processes
+            .subscribe_with(interval, network)
+            .map_err(|error| {
+                tracing::error!(
+                    error = format!("{error:#}"),
+                    "could not start process sampling"
+                );
+                Status::internal("could not start process sampling")
+            })?;
+        let stream = processes::stream(subscription, interval, network);
         Ok(Response::new(Box::pin(stream)))
     }
 
@@ -99,6 +111,21 @@ impl Monitor for MonitorService {
         })?;
         let stream = sessions::stream(subscription, interval);
         Ok(Response::new(Box::pin(stream)))
+    }
+
+    async fn get_app_icon(
+        &self,
+        request: Request<GetAppIconRequest>,
+    ) -> Result<Response<AppIcon>, Status> {
+        let bundle_path = request.into_inner().bundle_path;
+        match self.icons.png(bundle_path).await {
+            Ok(png) => Ok(Response::new(AppIcon { png })),
+            Err(IconError::InvalidPath(message)) => {
+                tracing::debug!(message, "refused a GetAppIcon request");
+                Err(Status::invalid_argument(message))
+            }
+            Err(IconError::Internal) => Err(Status::internal("could not read the app icon")),
+        }
     }
 }
 
@@ -122,6 +149,7 @@ pub async fn serve(
             sampler,
             processes,
             sessions,
+            icons: IconService::default(),
         }))
         .serve_with_incoming_shutdown(TcpListenerStream::new(listener), shutdown)
         .await

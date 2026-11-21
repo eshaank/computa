@@ -127,7 +127,7 @@ final class FakeRexRunner: RexActionRunning {
         #expect(model.outcome?.text == "Opened top in a new tab.")
         // The first outcome's timer ends: the newer outcome stays.
         clock.releaseFirst()
-        try await Task.sleep(for: .milliseconds(30))
+        try await pause(for: .milliseconds(30))
         #expect(model.outcome?.text == "Opened top in a new tab.")
         // Its own timer clears it.
         clock.releaseFirst()

@@ -6,73 +6,150 @@ import SwiftUI
 public struct SessionActions: Sendable {
     /// Sessions and panes with an action running, or panes just closed.
     public var busy: Set<RexActionTarget>
-    /// The last outcome, shown beside the sort control until it clears.
+    /// The last outcome, shown at the foot of the tab until it clears.
     public var outcome: RexActionOutcome?
+    /// Set when actions cannot run on the shown machine (a remote one without a Rex host
+    /// label): the controls are hidden and this line says why.
+    public var unavailableNote: String?
     public var perform: @MainActor @Sendable (RexAction) -> Void
 
     public init(
-        busy: Set<RexActionTarget>, outcome: RexActionOutcome?, perform: @escaping @MainActor @Sendable (RexAction) -> Void
+        busy: Set<RexActionTarget>, outcome: RexActionOutcome?, unavailableNote: String? = nil,
+        perform: @escaping @MainActor @Sendable (RexAction) -> Void
     ) {
         self.busy = busy
         self.outcome = outcome
+        self.unavailableNote = unavailableNote
         self.perform = perform
     }
 
+    /// No controls, and a line saying why.
+    public static func unavailable(_ note: String) -> SessionActions {
+        SessionActions(busy: [], outcome: nil, unavailableNote: note, perform: { _ in })
+    }
+
+    public var isAvailable: Bool { unavailableNote == nil }
+
     /// Does nothing; for previews and snapshots.
     public static let none = SessionActions(busy: [], outcome: nil, perform: { _ in })
+
+    func isBusy(_ session: RexSession) -> Bool { busy.contains(.session(session.id)) }
+    func isBusy(_ pane: RexPane) -> Bool { busy.contains(.pane(pane.id)) }
 }
 
-/// A small round icon button at the end of a row: quiet until the pointer is over it.
-struct RowIconButton: View {
-    let symbol: String
-    let label: String
-    var hoverTint: Color = Theme.text
+/// Opens a session's process viewer. On a card it is a round button with the glyph; in a
+/// session's header it has its title too. While the action runs, a spinner takes its place.
+struct ProcessViewerButton: View {
+    var titled = false
+    let isBusy: Bool
     let action: () -> Void
-    @State private var hovering = false
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(hovering ? hoverTint : Theme.dimText)
-                .frame(width: SessionRowMetrics.controlSize, height: SessionRowMetrics.controlSize)
-                .background(Circle().fill(Theme.track.opacity(hovering ? 0.9 : 0.4)))
-                .contentShape(Circle())
+        if isBusy {
+            busy
+        } else {
+            Button(action: action) {
+                if titled {
+                    Label("Process Viewer", systemImage: "waveform.path.ecg")
+                        .foregroundStyle(Theme.text)
+                } else {
+                    RoundGlyph(symbol: "waveform.path.ecg")
+                }
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(titled ? .capsule : .circle)
+            .help("Open a process viewer in this session")
+            .accessibilityLabel("Open process viewer")
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(label)
-        .accessibilityLabel(label)
+    }
+
+    private var busy: some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            if titled { Text("Opening…").font(.callout).foregroundStyle(Theme.dimText) }
+        }
+        .frame(minWidth: RoundGlyph.size, minHeight: RoundGlyph.size)
+        .accessibilityLabel("Opening process viewer")
     }
 }
 
-/// Takes a row control's place while its action runs.
-struct RowBusyIndicator: View {
+/// Asks to close a pane. In a row it is a round glyph button; in a pane's header it has its title.
+struct ClosePaneButton: View {
+    var titled = false
+    let isBusy: Bool
+    let action: () -> Void
+
     var body: some View {
-        ProgressView()
-            .controlSize(.mini)
-            .frame(width: SessionRowMetrics.controlSize, height: SessionRowMetrics.controlSize)
-            .accessibilityLabel("Working")
+        if isBusy {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                if titled { Text("Closing…").font(.callout).foregroundStyle(Theme.dimText) }
+            }
+            .frame(minWidth: RoundGlyph.size, minHeight: RoundGlyph.size)
+            .accessibilityLabel("Closing pane")
+        } else if titled {
+            Button(role: .destructive, action: action) {
+                Label("Close Pane…", systemImage: "xmark")
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(Theme.warning)
+            .help("Close this pane and end its programs")
+        } else {
+            Button(action: action) {
+                RoundGlyph(symbol: "xmark")
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
+            .help("Close pane…")
+            .accessibilityLabel("Close pane")
+        }
     }
 }
 
-/// The last action's outcome: a tick in the accent colour, or a warning with what to do.
+/// The glyph inside a round action button, at a size that is easy to hit whatever the button
+/// style draws around it.
+struct RoundGlyph: View {
+    static let size: CGFloat = 28
+    let symbol: String
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(Theme.text)
+            .frame(width: Self.size - 12, height: Self.size - 12)
+            .contentShape(Circle())
+    }
+}
+
+/// The last action's outcome: a tick, or a warning with what to do.
 struct ActionOutcomeLine: View {
     let outcome: RexActionOutcome
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Image(systemName: outcome.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(.system(size: 10, weight: .semibold))
+        Label {
             // Non-breaking hyphens keep "install-rex-actions" on one line.
             Text(outcome.text.replacingOccurrences(of: "-", with: "\u{2011}"))
-                .font(.system(size: 11, weight: outcome.succeeded ? .medium : .regular))
                 .lineLimit(3)
-                .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: outcome.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
         }
-        .foregroundStyle(outcome.succeeded ? Theme.accent : Theme.warning)
+        .font(.callout)
+        .foregroundStyle(outcome.succeeded ? Theme.cpu : Theme.warning)
         .help(outcome.text)
-        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Why actions cannot run on this machine.
+struct ActionsUnavailableLine: View {
+    let note: String
+
+    var body: some View {
+        Label(note, systemImage: "info.circle")
+            .font(.callout)
+            .foregroundStyle(Theme.dimText)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

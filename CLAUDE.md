@@ -21,8 +21,21 @@ TypeScript" rule and `tsconfig.json` do not apply here. The other global rules d
 
 ## Commands
 
-The `justfile` wraps the common ones: `just build`, `just run` (the daemon), `just probe`,
-`just test`, `just lint`. It adds `~/.cargo/bin` to `PATH` itself. The underlying commands:
+Run `just` to list every recipe. The `justfile` adds `~/.cargo/bin` to `PATH` itself.
+
+| Recipe | What it does |
+|---|---|
+| `just build`, `just test`, `just lint` | Build, test and lint both programs |
+| `just test-release` | Run the app's tests as a release build, the way `Computa.app` is built |
+| `just run` | Run the daemon on `127.0.0.1:7300` |
+| `just probe [host:port] [count] [--dashboard]` | Print what a running daemon reports |
+| `just app`, `just open-app` | Build `Computa.app`, and open it in the menu bar |
+| `just snapshots` | Render the app's views to PNG files in `app/.build/snapshots/` |
+| `just install-daemon [--dry-run]`, `just uninstall-daemon` | Add or remove the daemon as a login item |
+| `just install-rex-actions [--remove]` | Add or remove one line in the owner's Rex `init.lua` |
+| `just test-rex-actions` | Run the Rex actions in a throwaway Rex session |
+
+The underlying commands:
 
 ```sh
 # Daemon
@@ -36,16 +49,38 @@ cargo fmt --check
 cd app
 swift build
 swift test
-swift run computa-probe [host:port] [count]   # prints ticks from a running daemon
+swift run computa-probe [host:port] [count]   # prints what a running daemon reports
+swift run computa-snapshot                    # renders the views to PNG files, no screen needed
 ```
 
 ## Rules specific to this project
 
 - **The daemon's API is read-only.** Any program on the machine can reach a localhost port. Anything
   that changes the machine is a Rex action in `rex/computa.lua`, not a daemon call.
-- **The daemon listens on `127.0.0.1` only.** Remote access goes through `rex forward`.
+- **The daemon listens on `127.0.0.1` only.** The app reaches a daemon on another Mac through an
+  SSH tunnel that it starts itself.
+- **Never change the owner's machine without being asked.** Do not edit their Rex `init.lua`, run
+  `rex config reload`, or install the login item. Those are the owner's steps, through the `just`
+  recipes. Try Rex actions only in a throwaway session (`rex new …`, then `rex kill`).
+- **Nobody can see the screen.** Check UI by rendering it offscreen (`just snapshots`) and reading
+  the PNG files, and say plainly what was not seen running.
 - **Rex reference:** the `rex` skill in `.claude/skills/rex/`. Check it before using any Rex
   command, method or event.
+- **Wait with `pause(for:)`, never `Task.sleep(for:)`.** The second aborts the release app when
+  the wait ends, and a debug `swift test` does not show it. After changing anything that waits,
+  run `just test-release`.
+- **"Mem" means memory in RAM (resident size), everywhere.** Footprint, which also counts
+  compressed and swapped memory at full size, is a second figure and always labelled
+  "Footprint". Footprints add up to more than the RAM installed on a Mac that is swapping, so
+  never show one under a bare "Mem" or "Memory" heading.
+- **The app needs macOS 26 or later**, for Liquid Glass. Use native SwiftUI controls and the
+  semantic text styles (`.body`, `.headline`, `.caption` …), not `.system(size:)`.
+- **Glass does not draw offscreen.** A glass view renders as a blank image, so the snapshot tool
+  turns glass off for the popover (`drawsGlass`) and the PNGs show a plain stand-in. The
+  toolbar's selected tab also renders as a white pill with no label; that is probably the same
+  thing but has not been confirmed. Only the owner, on screen, can judge either.
+- **Glow is one setting:** `Glow` in `app/Sources/ComputaUI/Theme.swift`. Use `.glow(color)`,
+  not a hand-written `.shadow`.
 - **Files stay under 300 lines, functions under 50.** Split modules before they reach the limit.
 - **No swallowed errors.** Log with context (`tracing` in Rust), then return the error.
 
