@@ -63,7 +63,7 @@ struct StatusRows: View {
                     InfoRow(label: "Memory Pressure", value: pressure, valueColor: Theme.warning)
                 }
                 if let claude = content.claudeSummary {
-                    InfoRow(label: "Claude Code", value: claude, detail: PopoverContent.claudeMemoryNote, valueColor: Theme.sessions)
+                    InfoRow(label: "Claude Code", value: claude, detail: content.claudeMemoryNote, valueColor: Theme.sessions)
                         .help(PopoverContent.claudeMemoryHelp)
                 }
             } else if !content.machine.showsSwitcher, !content.machine.isRemote {

@@ -1,99 +1,100 @@
 import ComputaCore
 import SwiftUI
 
-/// The dim caption over a tab's panes, with the tab's total.
-struct TabCaption: View {
-    let tab: RexTab
-    let metric: ProcessMetric
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "macwindow")
-                .font(.system(size: 9.5, weight: .semibold))
-            Text(tab.label.isEmpty ? "Tab" : tab.label)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Text(ProcessList.valueText(SessionList.value(tab, metric), metric))
-        }
-        .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-        .foregroundStyle(Theme.dimText)
-        .padding(.leading, SessionRowMetrics.paneIndent)
-        .padding(.trailing, SessionRowMetrics.valueTrailing)
-        .padding(.top, 6)
-        .frame(height: 22, alignment: .bottom)
-    }
-}
-
-/// One pane: chevron, kind glyph, program, Claude tag, process count, its directory under the
-/// name, the value and the close control. While it closes, the row dims and says so.
+/// One pane in a session: its tile, program and Claude Code tag, its folder under the name, Mem
+/// and CPU, the close button, and a chevron saying a click opens it. While it closes, the row
+/// dims and says so.
 struct PaneRow: View {
     let pane: RexPane
     let metric: ProcessMetric
-    let isExpanded: Bool
+    let showsClose: Bool
     let isBusy: Bool
-    /// False on a machine where actions cannot run.
-    let showsControl: Bool
-    let onToggle: () -> Void
-    let onClose: () -> Void
+    let open: () -> Void
+    let close: () -> Void
+    @State private var hovering = false
 
+    /// Room for the close button, which floats over the row so the whole row stays one target.
+    private static let closeSlot: CGFloat = 40
+    private static let chevronWidth: CGFloat = 10
+
+    /// The whole row, padding and chevron included, opens the pane; only the close button does
+    /// something else.
     var body: some View {
-        HStack(spacing: SessionRowMetrics.controlGap) {
-            HStack(spacing: 8) {
-                Chevron(isExpanded: isExpanded, visible: !pane.processes.isEmpty, size: 9.5)
-                PaneIcon(kind: pane.kind)
-                name
-                Spacer(minLength: 8)
-                Text(isBusy ? "Closing…" : ProcessList.valueText(SessionList.value(pane, metric), metric))
-                    .font(.system(size: 12.5).monospacedDigit())
-                    .foregroundStyle(isBusy ? Theme.dimText : Theme.text.opacity(0.85))
-                    .lineLimit(1)
-            }
-            .opacity(isBusy ? 0.6 : 1)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onToggle)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(pane.processes.isEmpty ? [] : .isButton)
-            control
-        }
-        .padding(.leading, SessionRowMetrics.paneIndent)
-        .padding(.trailing, 14)
-        .frame(minHeight: 38)
-        .contextMenu {
-            if showsControl {
-                Button("Close Pane…", action: onClose)
-                    .disabled(isBusy)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var control: some View {
-        if !showsControl {
-            RowControlSpace()
-        } else if isBusy {
-            RowBusyIndicator()
-        } else {
-            RowIconButton(symbol: "xmark", label: "Close pane…", hoverTint: Theme.warning, action: onClose)
-        }
-    }
-
-    private var name: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 6) {
-                Text(pane.title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Theme.text.opacity(0.92))
-                    .lineLimit(1)
-                if pane.isClaude { ClaudeTag() }
-                if let badge = pane.badge { CountBadge(text: badge) }
-            }
-            if !pane.workingDirectory.isEmpty {
-                Text(WorkingDirectory.display(pane.workingDirectory))
-                    .font(.system(size: 10.5))
+        Button(action: open) {
+            HStack(spacing: 10) {
+                content
+                if showsClose { Color.clear.frame(width: Self.closeSlot, height: 1) }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.dimText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                    .frame(width: Self.chevronWidth)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(hovering ? 0.04 : 0))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Show the processes in this pane")
+        .overlay(alignment: .trailing) {
+            if showsClose {
+                ClosePaneButton(isBusy: isBusy, action: close)
+                    .frame(width: Self.closeSlot)
+                    .padding(.trailing, 12 + Self.chevronWidth + 10)
             }
         }
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Show Processes", action: open)
+            if showsClose {
+                Button("Close Pane…", role: .destructive, action: close).disabled(isBusy)
+            }
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 12) {
+            PaneTile(kind: pane.kind)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(pane.title)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    if pane.isClaude { ClaudeTag() }
+                }
+                if !pane.workingDirectory.isEmpty {
+                    Text(WorkingDirectory.abbreviatingHome(pane.workingDirectory))
+                        .font(.caption)
+                        .foregroundStyle(Theme.dimText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(pane.workingDirectory)
+                }
+            }
+            Spacer(minLength: 8)
+            values
+        }
+        .opacity(isBusy ? 0.55 : 1)
+        .contentShape(Rectangle())
+    }
+
+    /// The sorted-by figure first and brighter, the other under it.
+    private var values: some View {
+        let memory = "\(SessionMemoryWords.label(pane.memory)) \(SessionFigures.memory(pane.memory))"
+        let cpu = "CPU \(SessionFigures.cpu(pane.cpuPercent))"
+        let (first, second) = metric == .memory ? (memory, cpu) : (cpu, memory)
+        return VStack(alignment: .trailing, spacing: 2) {
+            Text(isBusy ? "Closing…" : first)
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(isBusy ? Theme.dimText : Theme.text)
+            Text(second)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(Theme.dimText)
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .help(SessionMemoryWords.help)
     }
 }

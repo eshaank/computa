@@ -32,9 +32,13 @@ public struct PopoverContent: Sendable, Equatable {
     }
 
     /// Under "Claude Code": which memory figure the row's size is. `ClaudeUsage.popoverText`
-    /// adds up the panes' `memoryBytes`, which are footprints; change this with it.
-    static let claudeMemoryNote = "Footprint of its panes"
-    static let claudeMemoryHelp = "Footprint: everything the panes' processes have allocated, compressed and swapped memory included. It is the Footprint column on the Mem tab, not Mem (in RAM)."
+    /// gives memory in RAM, or says "footprint" itself when an older daemon reports only that.
+    var claudeMemoryNote: String? {
+        guard let claudeSummary, !claudeSummary.hasSuffix("footprint") else { return nil }
+        return "In RAM"
+    }
+
+    static let claudeMemoryHelp = "What the panes' processes have in RAM right now. Their footprint, which also counts compressed and swapped memory, is on the Sessions tab."
 
     /// Prevent Sleep's subtitle: it always acts on the Mac running the app.
     var preventSleepNote: String? {

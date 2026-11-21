@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 
 /// Calls what the dashboard uses: GetHistory for each range, the first process snapshot, the
-/// second snapshot of a stream with traffic, then the first sessions snapshot.
+/// first snapshot with traffic rates, then the first sessions snapshot.
 /// Each failure is printed with the problem the dashboard would show, and the probe goes on.
 func probeDashboard(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> Bool {
     var allPassed = true
@@ -43,10 +43,13 @@ private func probeProcesses(_ client: DaemonClient, endpoint: DaemonEndpoint) as
     }
 }
 
-/// The second snapshot of a stream that asks for traffic: the first never has rates yet.
+/// A stream that asks for traffic, read until the daemon stops saying "measuring": its first
+/// snapshots have no rates yet. Gives up after `trafficPatience` snapshots.
 private func probeTraffic(_ client: DaemonClient, endpoint: DaemonEndpoint) async -> Bool {
     do {
-        let received = try await snapshots(client, count: 2, traffic: true)
+        let received = try await snapshots(client, count: trafficPatience, traffic: true) {
+            TrafficAvailability($0.network) != .measuring
+        }
         guard let snapshot = received.last else {
             print("traffic: the stream ended before the first snapshot")
             return false
@@ -72,12 +75,18 @@ private func probeTraffic(_ client: DaemonClient, endpoint: DaemonEndpoint) asyn
     }
 }
 
-/// The first `count` snapshots of a process stream.
-private func snapshots(_ client: DaemonClient, count: Int, traffic: Bool) async throws -> [ProcessSnapshot] {
+/// How many snapshots the traffic check waits for rates: about twelve seconds.
+private let trafficPatience = 6
+
+/// The first `count` snapshots of a process stream, or fewer when `isEnough` accepts one sooner.
+private func snapshots(
+    _ client: DaemonClient, count: Int, traffic: Bool,
+    stopWhen isEnough: @escaping @Sendable (ProcessSnapshot) -> Bool = { _ in false }
+) async throws -> [ProcessSnapshot] {
     let received = Mutex<[ProcessSnapshot]>([])
     try await client.watchProcesses(intervalMilliseconds: ProcessStore.intervalMilliseconds, includeNetwork: traffic) { snapshot in
         received.withLock { $0.append(snapshot) }
-        return received.withLock { $0.count } < count
+        return received.withLock { $0.count } < count && !isEnough(snapshot)
     }
     return received.withLock { $0 }
 }

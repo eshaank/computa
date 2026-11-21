@@ -69,6 +69,15 @@ swift run computa-snapshot                    # renders the views to PNG files, 
 - **Wait with `pause(for:)`, never `Task.sleep(for:)`.** The second aborts the release app when
   the wait ends, and a debug `swift test` does not show it. After changing anything that waits,
   run `just test-release`.
+- **"Mem" means memory in RAM (resident size), everywhere.** Footprint, which also counts
+  compressed and swapped memory at full size, is a second figure and always labelled
+  "Footprint". Footprints add up to more than the RAM installed on a Mac that is swapping, so
+  never show one under a bare "Mem" or "Memory" heading.
+- **The app needs macOS 26 or later**, for Liquid Glass. Use native SwiftUI controls and the
+  semantic text styles (`.body`, `.headline`, `.caption` …), not `.system(size:)`.
+- **Glass does not draw offscreen.** The snapshot tool turns it off (`drawsGlass`), so the PNGs
+  show a plain stand-in for the popover and the toolbar's selected tab. Only the owner, on
+  screen, can judge glass.
 - **Glow is one setting:** `Glow` in `app/Sources/ComputaUI/Theme.swift`. Use `.glow(color)`,
   not a hand-written `.shadow`.
 - **Files stay under 300 lines, functions under 50.** Split modules before they reach the limit.

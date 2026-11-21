@@ -41,16 +41,18 @@ public enum SessionList {
             }
     }
 
+    /// For memory, the resident size ("Mem"); where an older daemon left that unknown, the
+    /// footprint, which is the figure the row then shows and labels.
     public static func value(_ session: RexSession, _ metric: ProcessMetric) -> Double {
-        value(cpu: session.cpuPercent, memory: session.memoryBytes, metric)
+        value(cpu: session.cpuPercent, memory: session.memory.shownBytes, metric)
     }
 
     public static func value(_ tab: RexTab, _ metric: ProcessMetric) -> Double {
-        value(cpu: tab.cpuPercent, memory: tab.memoryBytes, metric)
+        value(cpu: tab.cpuPercent, memory: tab.memory.shownBytes, metric)
     }
 
     public static func value(_ pane: RexPane, _ metric: ProcessMetric) -> Double {
-        value(cpu: pane.cpuPercent, memory: pane.memoryBytes, metric)
+        value(cpu: pane.cpuPercent, memory: pane.memory.shownBytes, metric)
     }
 
     private static func value(cpu: Double, memory: UInt64, _ metric: ProcessMetric) -> Double {
@@ -85,46 +87,62 @@ public struct SessionsSummary: Sendable, Equatable {
     public var tabCount = 0
     public var paneCount = 0
     public var claudePaneCount = 0
-    public var claudeMemoryBytes: UInt64 = 0
+    /// Over the Claude Code panes: resident ("Mem") and footprint.
+    public var claudeMemory = SessionMemory(resident: 0, footprint: 0)
     /// Added up over the sessions, which the daemon adds up over their panes.
     public var cpuPercent: Double = 0
-    public var memoryBytes: UInt64 = 0
-    /// Largest first, in the same order as the list sorted by memory. Empty when no session uses
-    /// any memory, so nothing divides by zero.
+    /// Over every session: resident ("Mem") and footprint.
+    public var memory = SessionMemory(resident: 0, footprint: 0)
+    /// Largest first, ties by id. Shares of resident size, or of footprint when any session's
+    /// resident size is unknown, so the bar never mixes the two. Empty when no session uses any
+    /// memory, so nothing divides by zero.
     public var shares: [Share] = []
 
+    /// The total as shown: resident, or footprint when that is unknown (`memory.isFootprintOnly`).
+    public var memoryBytes: UInt64 { memory.shownBytes }
+    /// The Claude Code panes' figure as shown, like `memoryBytes`.
+    public var claudeMemoryBytes: UInt64 { claudeMemory.shownBytes }
+
     public init(_ sessions: [RexSession]) {
+        var claude: [SessionMemory] = []
         for session in sessions {
             sessionCount += 1
             tabCount += session.tabs.count
-            for pane in session.panes {
-                paneCount += 1
-                if pane.isClaude {
-                    claudePaneCount += 1
-                    claudeMemoryBytes += pane.memoryBytes
-                }
+            for pane in session.panes where pane.isClaude {
+                claude.append(pane.memory)
             }
+            paneCount += session.paneCount
             if session.cpuPercent.isFinite { cpuPercent += max(0, session.cpuPercent) }
-            memoryBytes += session.memoryBytes
         }
-        guard memoryBytes > 0 else { return }
-        let total = Double(memoryBytes)
-        shares = SessionList.sorted(sessions, by: .memory).map {
-            Share(id: $0.id, label: $0.label, fraction: Double($0.memoryBytes) / total)
-        }
+        claudePaneCount = claude.count
+        claudeMemory = SessionMemory.total(claude)
+        memory = SessionMemory.total(sessions.map(\.memory))
+        let byResident = memory.resident != nil
+        let total = Double(memory.shownBytes)
+        guard total > 0 else { return }
+        shares = sessions
+            .map { session in
+                let bytes = byResident ? session.memory.resident ?? 0 : session.memoryBytes
+                return Share(id: session.id, label: session.label, fraction: Double(bytes) / total)
+            }
+            .sorted { a, b in a.fraction != b.fraction ? a.fraction > b.fraction : a.id < b.id }
     }
 }
 
 /// Text for the popover's "Claude Code" row.
 public enum ClaudeUsage {
-    /// For example "3 panes · 4.2 GB", or nil when the row should be hidden: no snapshot (the
-    /// stream is not connected), Rex unreachable, or no pane running Claude Code.
+    /// For example "3 panes · 4.2 GB": the panes' resident size, what is in RAM now. When an older
+    /// daemon leaves that unknown, "5.1 GB footprint": the label matters more than the pane count,
+    /// and both do not fit the popover's row. Nil when the row should be hidden: no snapshot (the
+    /// stream is not connected), Rex unreachable, or no Claude Code pane.
     public static func popoverText(_ snapshot: SessionsSnapshot?) -> String? {
         guard let snapshot, snapshot.rex.reachable else { return nil }
         let summary = SessionsSummary(snapshot.sessions)
         guard summary.claudePaneCount > 0 else { return nil }
+        let memory = summary.claudeMemory
+        if memory.isFootprintOnly { return "\(Format.memory(memory.footprint)) footprint" }
         let panes = summary.claudePaneCount == 1 ? "1 pane" : "\(summary.claudePaneCount) panes"
-        return "\(panes) · \(Format.memory(summary.claudeMemoryBytes))"
+        return "\(panes) · \(Format.memory(memory.shownBytes))"
     }
 }
 

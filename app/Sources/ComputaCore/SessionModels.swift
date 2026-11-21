@@ -37,18 +37,24 @@ public struct RexSession: Sendable, Equatable, Identifiable {
     public var label: String
     /// 100 is one core fully busy.
     public var cpuPercent: Double
+    /// Footprint, added up over the processes. See `ProcessEntry.memoryBytes`.
     public var memoryBytes: UInt64
+    /// In RAM now, added up over the processes. 0 from a daemon too old to send it; use `memory`,
+    /// which falls back sensibly.
+    public var residentBytes: UInt64
     public var processCount: Int
     /// In Rex's order.
     public var tabs: [RexTab]
 
     public init(
-        id: String, label: String, cpuPercent: Double, memoryBytes: UInt64, processCount: Int, tabs: [RexTab]
+        id: String, label: String, cpuPercent: Double, memoryBytes: UInt64, residentBytes: UInt64 = 0,
+        processCount: Int, tabs: [RexTab]
     ) {
         self.id = id
         self.label = label
         self.cpuPercent = cpuPercent
         self.memoryBytes = memoryBytes
+        self.residentBytes = residentBytes
         self.processCount = processCount
         self.tabs = tabs
     }
@@ -65,17 +71,22 @@ public struct RexTab: Sendable, Equatable, Identifiable {
     public var id: String
     public var label: String
     public var cpuPercent: Double
+    /// Footprint. See `RexSession.memoryBytes`.
     public var memoryBytes: UInt64
+    /// In RAM now; 0 from an older daemon. See `RexSession.residentBytes`.
+    public var residentBytes: UInt64
     public var processCount: Int
     public var panes: [RexPane]
 
     public init(
-        id: String, label: String, cpuPercent: Double, memoryBytes: UInt64, processCount: Int, panes: [RexPane]
+        id: String, label: String, cpuPercent: Double, memoryBytes: UInt64, residentBytes: UInt64 = 0,
+        processCount: Int, panes: [RexPane]
     ) {
         self.id = id
         self.label = label
         self.cpuPercent = cpuPercent
         self.memoryBytes = memoryBytes
+        self.residentBytes = residentBytes
         self.processCount = processCount
         self.panes = panes
     }
@@ -98,7 +109,10 @@ public struct RexPane: Sendable, Equatable, Identifiable {
     public var id: String
     public var label: String
     public var cpuPercent: Double
+    /// Footprint. See `RexSession.memoryBytes`.
     public var memoryBytes: UInt64
+    /// In RAM now; 0 from an older daemon. See `RexSession.residentBytes`.
+    public var residentBytes: UInt64
     /// Every process started in the pane, readable or not.
     public var processCount: Int
     public var kind: PaneKind
@@ -110,13 +124,14 @@ public struct RexPane: Sendable, Equatable, Identifiable {
     public var processes: [ProcessEntry]
 
     public init(
-        id: String, label: String, cpuPercent: Double, memoryBytes: UInt64, processCount: Int, kind: PaneKind,
-        program: String, workingDirectory: String, processes: [ProcessEntry]
+        id: String, label: String, cpuPercent: Double, memoryBytes: UInt64, residentBytes: UInt64 = 0,
+        processCount: Int, kind: PaneKind, program: String, workingDirectory: String, processes: [ProcessEntry]
     ) {
         self.id = id
         self.label = label
         self.cpuPercent = cpuPercent
         self.memoryBytes = memoryBytes
+        self.residentBytes = residentBytes
         self.processCount = processCount
         self.kind = kind
         self.program = program
@@ -160,7 +175,7 @@ extension RexSession {
     package init(_ message: Computa_V1_Session) {
         self.init(
             id: message.id, label: message.label, cpuPercent: message.cpuPercent, memoryBytes: message.memoryBytes,
-            processCount: Int(message.processCount), tabs: message.windows.map(RexTab.init)
+            residentBytes: message.residentBytes, processCount: Int(message.processCount), tabs: message.windows.map(RexTab.init)
         )
     }
 }
@@ -169,7 +184,7 @@ extension RexTab {
     package init(_ message: Computa_V1_SessionWindow) {
         self.init(
             id: message.id, label: message.label, cpuPercent: message.cpuPercent, memoryBytes: message.memoryBytes,
-            processCount: Int(message.processCount), panes: message.panes.map(RexPane.init)
+            residentBytes: message.residentBytes, processCount: Int(message.processCount), panes: message.panes.map(RexPane.init)
         )
     }
 }
@@ -178,7 +193,7 @@ extension RexPane {
     package init(_ message: Computa_V1_Pane) {
         self.init(
             id: message.id, label: message.label, cpuPercent: message.cpuPercent, memoryBytes: message.memoryBytes,
-            processCount: Int(message.processCount), kind: PaneKind(message.kind), program: message.program,
+            residentBytes: message.residentBytes, processCount: Int(message.processCount), kind: PaneKind(message.kind), program: message.program,
             workingDirectory: message.workingDirectory, processes: message.processes.map(ProcessEntry.init)
         )
     }

@@ -165,6 +165,24 @@ Login is off on this Mac and the M1 could not be reached, so real `ssh` was neve
 - Pull request 7 changed how the stores receive their wait function. That did not fix the crash.
   The working fix is on this branch only and has not been merged back into the earlier branches.
 
+### After the owner first ran it (2026-11-20 and 21)
+
+The owner ran the app on screen and asked for changes. They are on the phase 6 branch.
+
+- **Memory.** The Mem list showed footprints, which added up to 30 GB for one app on a 24 GB
+  Mac that had 22 GB in swap. "Mem" now means memory in RAM (resident size) everywhere, with
+  "Compressed + swap" (approximate) and "Footprint" as labelled columns, the definitions in
+  tooltips and an info popover, and swap and the compressor's stored size under the chart.
+- **Net tab by app.** The daemon measures traffic per process with `nettop`, only while the Net
+  tab is showing. It counts data on Wi-Fi, Ethernet and AWDL, without packet headers and without
+  loopback, so apps add up to a little less than the chart (about 92% in a 1 GB download test).
+  Not checked with a VPN running.
+- **Native look.** Toolbar tabs like Activity Monitor, system text styles, a grouped-form
+  Preferences window, and the popover in Liquid Glass. The app now needs macOS 26.
+- **Sessions tab.** Session cards that open to a session's panes and then one pane's processes,
+  with a back button and a clickable path, replacing the nested list.
+- Glass cannot be rendered offscreen, so none of it has been seen by anyone but the owner.
+
 ### What to do on the M1
 
 1. On the M1: System Settings → General → Sharing → turn on Remote Login.
