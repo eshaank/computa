@@ -16,7 +16,19 @@ build:
 run:
     cd daemon && cargo run
 
-# Print ticks from a running daemon; arguments: [host:port] [count]
+# Build Computa.app into app/.build/ (a release build, a few minutes when cold)
+app:
+    scripts/build-app.sh
+
+# Build Computa.app and open it in the menu bar
+open-app: app
+    open app/.build/Computa.app
+
+# Render the app's views to PNG files in app/.build/snapshots/
+snapshots:
+    cd app && swift run computa-snapshot
+
+# Print what a running daemon reports; arguments: [host:port] [count]
 probe *args:
     cd app && swift run computa-probe {{args}}
 

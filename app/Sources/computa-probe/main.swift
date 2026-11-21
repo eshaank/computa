@@ -5,6 +5,7 @@
 
 import ComputaCore
 import Foundation
+import Synchronization
 
 let defaultCount = 10
 
@@ -13,16 +14,18 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-func gigabytes(_ bytes: UInt64) -> String {
-    (Double(bytes) / 1_073_741_824).formatted(.number.precision(.fractionLength(2))) + " GB"
-}
-
-func megabytesPerSecond(_ bytesPerSecond: Double) -> String {
-    (bytesPerSecond / 1_048_576).formatted(.number.precision(.fractionLength(2))) + " MB/s"
-}
-
-func percent(_ value: Double) -> String {
-    value.formatted(.number.precision(.fractionLength(1))) + "%"
+func line(for sample: SystemSample) -> String {
+    let memory = sample.memory
+    let disk = sample.startupVolume
+    return [
+        "cpu \(Format.percent(sample.cpu.usagePercent))",
+        "mem \(Format.percent(memory.usedPercent)) (\(Format.memory(memory.usedBytes)) of \(Format.memory(memory.totalBytes)))",
+        "swap \(Format.memory(memory.swapUsedBytes))",
+        "disk \(disk.map { "\(Format.percent($0.usedPercent)) (\(Format.storage($0.usedBytes)) of \(Format.storage($0.totalBytes)))" } ?? "?")",
+        "io r \(Format.rate(sample.diskReadBytesPerSecond)) w \(Format.rate(sample.diskWriteBytesPerSecond))",
+        "net down \(Format.rate(sample.network.receiveBytesPerSecond)) up \(Format.rate(sample.network.sendBytesPerSecond))",
+        sample.battery.map { "battery \(Format.battery($0))" } ?? "no battery",
+    ].joined(separator: " | ")
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
@@ -40,27 +43,22 @@ let client = DaemonClient(endpoint: endpoint)
 do {
     let host = try await client.host()
     let cores = host.coreGroups.map { "\($0.coreCount) \($0.name)" }.joined(separator: " + ")
-    print("\(host.hostname): \(host.chip), \(cores) cores, \(gigabytes(host.memoryTotalBytes)), \(host.osVersion)")
-    print("computad \(host.daemonVersion), sampling every \(host.sampleIntervalMs) ms\n")
+    print("\(host.hostname): \(host.chip), \(cores) cores, \(Format.memory(host.memoryTotalBytes)), \(host.osVersion)")
+    print("computad \(host.daemonVersion), sampling every \(host.sampleIntervalMilliseconds) ms\n")
 
-    let received = try await client.watchSystem(limit: count) { sample in
-        let memory = sample.memory
-        let disk = sample.volumes.first
-        let line = [
-            "cpu \(percent(sample.cpu.usagePercent))",
-            "mem \(gigabytes(memory.usedBytes)) of \(gigabytes(memory.totalBytes))",
-            "swap \(gigabytes(memory.swapUsedBytes))",
-            "disk \(disk.map { gigabytes($0.usedBytes) } ?? "?") used",
-            "io r \(megabytesPerSecond(sample.diskActivity.readBytesPerSec)) w \(megabytesPerSecond(sample.diskActivity.writeBytesPerSec))",
-            "net down \(megabytesPerSecond(sample.network.rxBytesPerSec)) up \(megabytesPerSecond(sample.network.txBytesPerSec))",
-            sample.hasBattery ? "battery \(percent(sample.battery.chargePercent))" : "no battery",
-        ].joined(separator: " | ")
-        print(line)
+    let received = Mutex(0)
+    try await client.watchSystem(intervalMilliseconds: 0) { sample in
+        print(line(for: sample))
+        return received.withLock { total in
+            total += 1
+            return total < count
+        }
     }
-    guard received == count else {
-        fail("the daemon ended the stream after \(received) of \(count) samples")
+    let total = received.withLock { $0 }
+    guard total == count else {
+        fail("the daemon ended the stream after \(total) of \(count) samples")
     }
-    print("\nOK: received \(received) samples.")
+    print("\nOK: received \(total) samples.")
 } catch {
-    fail("could not read from \(endpoint): \(error)")
+    fail("could not read from \(endpoint): \(DaemonProblem(error: error, endpoint: endpoint).summary) (\(error))")
 }

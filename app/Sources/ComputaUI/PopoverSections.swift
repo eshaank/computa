@@ -1,0 +1,121 @@
+import ComputaCore
+import SwiftUI
+
+/// CPU, memory and startup disk as three rings. Without a sample only the tracks show.
+struct RingsSection: View {
+    let sample: SystemSample?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ring(symbol: "cpu", label: "CPU", percent: sample?.cpu.usagePercent, color: Theme.cpu, detail: nil)
+            ring(
+                symbol: "memorychip", label: "MEM", percent: sample?.memory.usedPercent, color: Theme.memory,
+                detail: sample.map { Format.memoryUsage(used: $0.memory.usedBytes, total: $0.memory.totalBytes) }
+            )
+            ring(
+                symbol: "internaldrive", label: "DISK", percent: sample.map { $0.startupVolume?.usedPercent ?? 0 },
+                color: Theme.disk,
+                detail: sample?.startupVolume.map { Format.storageUsage(used: $0.usedBytes, total: $0.totalBytes) }
+            )
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+        .padding(.horizontal, 8)
+    }
+
+    private func ring(symbol: String, label: String, percent: Double?, color: Color, detail: String?) -> some View {
+        RingView(
+            symbol: symbol,
+            label: label,
+            fraction: percent.map(Format.ringFraction),
+            color: color,
+            value: percent.map(Format.percent) ?? "–",
+            detail: detail
+        )
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// Machine, network, battery and memory pressure rows, or a connecting note.
+struct StatusRows: View {
+    let content: PopoverContent
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let sample = content.sample {
+                machineRow(time: sample.time)
+                InfoRow(
+                    label: "Network",
+                    value: "↓ \(Format.rate(sample.network.receiveBytesPerSecond))  ↑ \(Format.rate(sample.network.sendBytesPerSecond))",
+                    valueColor: Theme.network
+                )
+                if let battery = sample.battery {
+                    InfoRow(label: "Battery", value: Format.battery(battery))
+                }
+                if let pressure = pressureText(sample.memory.pressure) {
+                    InfoRow(label: "Memory Pressure", value: pressure, valueColor: Theme.warning)
+                }
+            } else {
+                InfoRow(label: "Connecting…", value: content.endpoint.description, valueColor: Theme.dimText)
+            }
+        }
+        .padding(.horizontal, Metrics.sidePadding)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private func machineRow(time: Date) -> some View {
+        if let host = content.host {
+            InfoRow(
+                label: host.hostname,
+                value: "up \(Format.uptime(since: host.bootTime, now: time))",
+                detail: host.chip,
+                valueColor: Theme.dimText
+            )
+        }
+    }
+
+    private func pressureText(_ pressure: MemoryPressure) -> String? {
+        switch pressure {
+        case .warning: "Warning"
+        case .critical: "Critical"
+        case .normal, .unknown: nil
+        }
+    }
+}
+
+/// Shown instead of the numbers when the daemon cannot be reached.
+struct DaemonDownSection: View {
+    let problem: DaemonProblem
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "bolt.horizontal.circle")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(Theme.warning)
+                .shadow(color: Theme.warning.opacity(0.6), radius: 6)
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.text)
+            Text(problem.summary)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.text.opacity(0.8))
+            Text("Computa will reconnect by itself as soon as it answers.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.dimText)
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, Metrics.sidePadding)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var title: String {
+        switch problem.kind {
+        case .unreachable: "Daemon not running"
+        case .unsupported: "Daemon needs an update"
+        case .streamEnded, .other: "Daemon not responding"
+        }
+    }
+}
