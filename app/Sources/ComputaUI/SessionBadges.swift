@@ -1,80 +1,163 @@
 import ComputaCore
 import SwiftUI
 
-/// The disclosure chevron, turned down when open. Invisible (but still taking its room) when
-/// there is nothing to open.
-struct Chevron: View {
-    let isExpanded: Bool
-    var visible = true
-    var size: CGFloat = 11
+/// Sizes shared by the Sessions tab's views.
+enum SessionMetrics {
+    static let cardRadius: CGFloat = 14
+    static let groupRadius: CGFloat = 12
+    static let gap: CGFloat = 10
+    /// The narrowest a session card gets before the grid drops a column.
+    static let cardMinimumWidth: CGFloat = 190
+}
 
-    var body: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: size, weight: .semibold))
-            .foregroundStyle(Theme.text.opacity(0.75))
-            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-            .frame(width: 10)
-            .opacity(visible ? 1 : 0)
+/// What "Mem" and "Footprint" mean, on every figure that shows either.
+enum MemoryWords {
+    static let help = "Mem is what is in RAM now. Footprint also counts memory macOS has compressed "
+        + "or moved to swap, so it can exceed the RAM installed."
+
+    /// "Mem", or "Footprint" when an older daemon left the resident size unknown.
+    static func label(_ memory: SessionMemory) -> String { memory.isFootprintOnly ? "Footprint" : "Mem" }
+}
+
+/// The surface under cards and grouped rows: a light frosted layer over the window, with a hairline
+/// edge, like the grouped sections of System Settings.
+struct SessionSurface: ViewModifier {
+    var radius: CGFloat = SessionMetrics.cardRadius
+    var highlighted = false
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .background(shape.fill(Color.white.opacity(highlighted ? 0.085 : 0.05)))
+            .overlay(shape.strokeBorder(Color.white.opacity(highlighted ? 0.14 : 0.07), lineWidth: 1))
     }
 }
 
-/// A pane's glyph: Claude Code in the accent colour with a glow, a terminal for a shell, a
-/// generic program glyph otherwise.
-struct PaneIcon: View {
-    let kind: PaneKind
-    var size: CGFloat = SessionRowMetrics.paneIconSize
+extension View {
+    func sessionSurface(radius: CGFloat = SessionMetrics.cardRadius, highlighted: Bool = false) -> some View {
+        modifier(SessionSurface(radius: radius, highlighted: highlighted))
+    }
+}
+
+/// A coloured, rounded icon tile, as in System Settings' sidebar.
+struct IconTile: View {
+    let symbol: String
+    let tint: Color
+    var size: CGFloat = 28
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-            .fill(kind == .claude ? Theme.sessions.opacity(0.18) : Theme.track)
+        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
+            .fill(tint.gradient)
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: symbol)
-                    .font(.system(size: size * 0.52, weight: .semibold))
-                    .foregroundStyle(kind == .claude ? Theme.sessions : Theme.text.opacity(0.8))
-                    .glow(Theme.sessions, isOn: kind == .claude)
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundStyle(.white)
             )
             .accessibilityHidden(true)
+    }
+}
+
+/// The tile for a pane: Claude Code in the sessions pink with its glow, a shell in green, any
+/// other program in blue-grey.
+struct PaneTile: View {
+    let kind: PaneKind
+    var size: CGFloat = 28
+
+    var body: some View {
+        IconTile(symbol: symbol, tint: tint, size: size)
+            .glow(Theme.sessions, isOn: kind == .claude)
     }
 
     private var symbol: String {
         switch kind {
         case .claude: "sparkle"
-        case .shell: "terminal"
+        case .shell: "apple.terminal"
         case .program, .unspecified: "app.dashed"
+        }
+    }
+
+    private var tint: Color {
+        switch kind {
+        case .claude: Theme.sessions
+        case .shell: Color(hex: 0x2F8F5B)
+        case .program, .unspecified: Theme.track
         }
     }
 }
 
-/// The small "Claude" tag beside a Claude Code pane's name.
+/// The tile for a session: pink when Claude Code runs in it.
+struct SessionTile: View {
+    let session: RexSession
+    var size: CGFloat = 28
+
+    var body: some View {
+        IconTile(
+            symbol: "rectangle.split.2x2", tint: session.claudePaneCount > 0 ? Theme.sessions : Theme.track, size: size
+        )
+    }
+}
+
+/// The small "Claude Code" tag beside a pane's name.
 struct ClaudeTag: View {
     var body: some View {
-        Text("Claude")
-            .font(.system(size: 9.5, weight: .semibold))
+        Text("Claude Code")
+            .font(.caption2.weight(.semibold))
             .foregroundStyle(Theme.sessions)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1.5)
-            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Theme.sessions.opacity(0.15)))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Theme.sessions.opacity(0.16)))
             .fixedSize()
     }
 }
 
-/// On a session row: how many of its panes run Claude Code, so they show without opening it.
-struct ClaudeMarker: View {
+/// How many of a session's panes run Claude Code.
+struct ClaudeCount: View {
     let count: Int
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "sparkle")
-                .font(.system(size: 9, weight: .bold))
-            Text(verbatim: "\(count)")
-                .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-        }
-        .foregroundStyle(Theme.sessions)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.sessions.opacity(0.14)))
-        .fixedSize()
-        .accessibilityLabel("\(count) running Claude Code")
+        Label("\(count)", systemImage: "sparkle")
+            .labelStyle(.titleAndIcon)
+            .font(.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(Theme.sessions)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Theme.sessions.opacity(0.16)))
+            .fixedSize()
+            .help(count == 1 ? "1 pane running Claude Code" : "\(count) panes running Claude Code")
+            .accessibilityLabel("\(count) running Claude Code")
     }
+}
+
+/// A small caption over a figure: "Mem" / "1.2 GB".
+struct Figure: View {
+    let label: String
+    let value: String
+    var emphasized = true
+    var tint: Color = Theme.text
+    var help: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(Theme.dimText)
+            Text(value)
+                .font(.body.weight(emphasized ? .medium : .regular).monospacedDigit())
+                .foregroundStyle(emphasized ? tint : tint.opacity(0.75))
+                .lineLimit(1)
+        }
+        .help(help ?? "")
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The figure texts for a session, tab or pane.
+enum SessionFigures {
+    static func memory(_ memory: SessionMemory) -> String { Format.memory(memory.shownBytes) }
+    static func cpu(_ percent: Double) -> String { Format.cpuShare(percent.isFinite ? max(0, percent) : 0) }
+}
+
+func plural(_ count: Int, _ noun: String) -> String {
+    "\(count) \(noun)\(count == 1 ? "" : "s")"
 }
